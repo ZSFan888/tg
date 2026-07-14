@@ -3,10 +3,11 @@ import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import type { PersonaKey } from '../types/env';
 import { clearChatHistory } from '../storage/chat-store';
-import { getUserPreferences, setUserPersona } from '../storage/preferences-store';
+import { getUserPreferences, setUserPersona, setUserModel } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
+import { getModelByKey } from '../config/models';
 
 export function registerCallbacks(bot: Bot<BotContext>) {
   bot.callbackQuery('menu:chat', async (ctx) => {
@@ -72,5 +73,16 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
     await ctx.answerCallbackQuery({ text: `已切换到${current.label}` });
     await ctx.editMessageText(`回复风格已切换为：${current.label}`);
+  });
+
+  bot.callbackQuery(/^model:(.+)$/, async (ctx) => {
+    if (!ctx.from) return;
+    const modelKey = ctx.match?.[1] ?? '';
+    const model = getModelByKey(modelKey);
+
+    await setUserModel(ctx.env, ctx.from.id, model.id);
+
+    await ctx.answerCallbackQuery({ text: `已切换到${model.label}` });
+    await ctx.editMessageText(`模型已切换为：${model.label}\n${model.note}`);
   });
 }

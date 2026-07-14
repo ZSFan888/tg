@@ -6,6 +6,7 @@ import { getUserPreferences } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
+import { MODELS, getModelById } from '../config/models';
 
 export function registerCommands(bot: Bot<BotContext>) {
   bot.command('start', async (ctx) => {
@@ -31,7 +32,7 @@ export function registerCommands(bot: Bot<BotContext>) {
       '/setprompt - 设置自定义系统提示词',
       '/usage - 查看今日使用次数',
       '/clear - 清空当前会话上下文',
-      '/model - 查看当前模型',
+      '/model - 查看并切换 AI 模型',
       '/ping - 健康检查'
     ].join('\n'));
   });
@@ -74,7 +75,20 @@ export function registerCommands(bot: Bot<BotContext>) {
   });
 
   bot.command('model', async (ctx) => {
-    await ctx.reply(`当前模型：${ctx.env.AI_MODEL}`);
+    if (!ctx.from) return;
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const current = getModelById(prefs.modelId ?? ctx.env.AI_MODEL);
+
+    const keyboard = new InlineKeyboard();
+    for (const model of MODELS) {
+      const label = model.id === current.id ? `✓ ${model.label}` : model.label;
+      keyboard.text(label, `model:${model.key}`).row();
+    }
+
+    await ctx.reply(
+      `当前模型：${current.label}\n${current.note}\n\n选择一个新的模型：`,
+      { reply_markup: keyboard }
+    );
   });
 
   bot.command('ping', async (ctx) => {

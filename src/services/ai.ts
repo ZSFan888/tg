@@ -34,7 +34,8 @@ export async function generateReply(
   env: Env,
   history: ChatMessage[],
   input: string,
-  systemPrompt: string
+  systemPrompt: string,
+  modelId?: string
 ) {
   const messages = trimMessages([
     { role: 'system', content: systemPrompt },
@@ -43,7 +44,7 @@ export async function generateReply(
   ]);
 
   try {
-    const result = await env.AI.run(env.AI_MODEL, { messages });
+    const result = await env.AI.run(modelId ?? env.AI_MODEL, { messages });
     const output = readResponse(result).trim();
     return output || '我现在有点忙，请你换个问法再试一次。';
   } catch (err) {
@@ -80,7 +81,8 @@ export async function generateReplyStream(
   history: ChatMessage[],
   input: string,
   systemPrompt: string,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  modelId?: string
 ) {
   const messages = trimMessages([
     { role: 'system', content: systemPrompt },
@@ -89,7 +91,7 @@ export async function generateReplyStream(
   ]);
 
   try {
-    const result = await env.AI.run(env.AI_MODEL, { messages, stream: true });
+    const result = await env.AI.run(modelId ?? env.AI_MODEL, { messages, stream: true });
 
     if (!(result instanceof ReadableStream)) {
       const fallback = readResponse(result).trim() || '我现在有点忙，请你换个问法再试一次。';

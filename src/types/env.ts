@@ -33,6 +33,7 @@ export type PersonaKey = 'default' | 'concise' | 'professional' | 'humorous' | '
 export interface UserPreferences {
   persona: PersonaKey;
   customPrompt?: string;
+  modelId?: string;
   updatedAt: number;
 }
 

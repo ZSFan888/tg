@@ -21,11 +21,22 @@ export async function setUserPersona(env: Env, userId: number | string, persona:
 }
 
 export async function setCustomPrompt(env: Env, userId: number | string, customPrompt: string) {
+  const existing = await getUserPreferences(env, userId);
   const prefs: UserPreferences = {
+    ...existing,
     persona: 'custom',
     customPrompt,
     updatedAt: Date.now()
   };
+  await env.BOT_KV.put(key(userId), JSON.stringify(prefs), {
+    expirationTtl: 60 * 60 * 24 * 90
+  });
+  return prefs;
+}
+
+export async function setUserModel(env: Env, userId: number | string, modelId: string) {
+  const existing = await getUserPreferences(env, userId);
+  const prefs: UserPreferences = { ...existing, modelId, updatedAt: Date.now() };
   await env.BOT_KV.put(key(userId), JSON.stringify(prefs), {
     expirationTtl: 60 * 60 * 24 * 90
   });

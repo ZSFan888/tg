@@ -42,6 +42,7 @@ export function registerMessages(bot: Bot<BotContext>) {
     const prefs = await getUserPreferences(ctx.env, ctx.from.id);
     const { prompt } = resolveSystemPrompt(prefs);
     const history = await getChatHistory(ctx.env, ctx.chat.id);
+    const modelId = prefs.modelId ?? ctx.env.AI_MODEL;
 
     const placeholder = await ctx.reply('思考中…', {
       reply_parameters: { message_id: ctx.msg.message_id }
@@ -83,7 +84,7 @@ export function registerMessages(bot: Bot<BotContext>) {
       onError: async () => {
         await flushEdit('抱歉，AI 服务暂时出了点问题，请稍后再试。', true);
       }
-    });
+    }, modelId);
 
     await saveChatHistory(ctx.env, ctx.chat.id, [
       ...history,
