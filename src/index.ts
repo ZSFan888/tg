@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import type { Env } from './types/env';
 import { createBot } from './bot/create-bot';
 import { BOT_COMMANDS } from './bot/commands-menu';
+import { resolveEnv } from './storage/settings-store';
+import { registerAdminRoutes } from './admin/routes';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -14,7 +16,8 @@ app.post('/telegram/webhook', async (c) => {
     return c.text('Unauthorized', 401);
   }
 
-  const { handleUpdate } = createBot(c.env, (p) => c.executionCtx.waitUntil(p));
+  const resolvedEnv = await resolveEnv(c.env);
+  const { handleUpdate } = createBot(resolvedEnv, (p) => c.executionCtx.waitUntil(p));
   return handleUpdate(c.req.raw);
 });
 
@@ -24,9 +27,12 @@ app.get('/setup-menu', async (c) => {
     return c.text('Unauthorized', 401);
   }
 
-  const { bot } = createBot(c.env, (p) => c.executionCtx.waitUntil(p));
+  const resolvedEnv = await resolveEnv(c.env);
+  const { bot } = createBot(resolvedEnv, (p) => c.executionCtx.waitUntil(p));
   await bot.api.setMyCommands(BOT_COMMANDS);
   return c.json({ ok: true, commands: BOT_COMMANDS });
 });
+
+registerAdminRoutes(app);
 
 export default app;

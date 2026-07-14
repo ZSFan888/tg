@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理面板 - tg-cf-ai-bot</title>
+<style>
+:root {
+  --bg: #0f1115;
+  --surface: #161922;
+  --surface-2: #1c202b;
+  --border: rgba(255,255,255,0.08);
+  --text: #e6e8ec;
+  --text-muted: #8a8f9c;
+  --primary: #4f98a3;
+  --primary-hover: #6bb0ba;
+  --success: #6daa45;
+  --error: #dd6974;
+  --warning: #e8af34;
+  --radius: 10px;
+  --radius-lg: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+.hidden { display: none !important; }
+.container { max-width: 1080px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* Login/Setup screens */
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 380px;
+}
+.auth-card h1 { font-size: 20px; margin-bottom: 6px; }
+.auth-card p.sub { color: var(--text-muted); font-size: 13px; margin-bottom: 22px; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
+.field input, .field textarea, .field select {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: inherit;
+}
+.field input:focus, .field textarea:focus, .field select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+.field textarea { resize: vertical; min-height: 70px; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--primary);
+  color: #0f1115;
+  border: none;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.btn:hover { background: var(--primary-hover); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.full { width: 100%; }
+.btn.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.btn.secondary:hover { background: #262b38; }
+.btn.danger { background: var(--error); color: #1a0e10; }
+.btn.danger:hover { background: #e8848d; }
+.btn.small { padding: 6px 12px; font-size: 12px; }
+.error-msg { color: var(--error); font-size: 13px; margin-top: 10px; min-height: 16px; }
+.success-msg { color: var(--success); font-size: 13px; margin-top: 10px; min-height: 16px; }
+
+/* Dashboard */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.topbar h1 { font-size: 18px; display: flex; align-items: center; gap: 10px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; }
+.dot.off { background: var(--error); }
+.tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+.tab-btn {
+  background: none; border: none; color: var(--text-muted);
+  padding: 10px 16px; font-size: 14px; cursor: pointer;
+  border-bottom: 2px solid transparent; font-family: inherit;
+}
+.tab-btn.active { color: var(--text); border-bottom-color: var(--primary); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+}
+.card .label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.card .value { font-size: 24px; font-weight: 700; }
+.card .value.small { font-size: 15px; font-weight: 600; word-break: break-all; }
+.card .sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+.section-title { font-size: 15px; font-weight: 600; margin: 28px 0 12px; }
+.section-title:first-child { margin-top: 0; }
+
+.setting-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+.setting-row .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; gap: 12px; }
+.setting-row .head .title { font-size: 14px; font-weight: 600; }
+.setting-row .desc { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+.setting-row .row-actions { display: flex; gap: 8px; margin-top: 10px; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-muted); }
+.badge.on { background: rgba(109,170,69,0.15); color: var(--success); }
+
+.toggle {
+  position: relative; width: 44px; height: 24px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 999px; cursor: pointer; flex-shrink: 0;
+}
+.toggle .knob {
+  position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+  background: var(--text-muted); border-radius: 50%; transition: all 0.15s ease;
+}
+.toggle.on { background: rgba(79,152,163,0.3); border-color: var(--primary); }
+.toggle.on .knob { left: 24px; background: var(--primary); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--text-muted); font-weight: 500; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tr:last-child td { border-bottom: none; }
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; overflow-x: auto; }
+
+.empty-hint { text-align: center; color: var(--text-muted); padding: 40px 20px; font-size: 13px; }
+
+.confirm-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px;
+}
+.confirm-box {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 24px; max-width: 360px; width: 100%;
+}
+.confirm-box h3 { font-size: 15px; margin-bottom: 8px; }
+.confirm-box p { font-size: 13px; color: var(--text-muted); margin-bottom: 18px; }
+.confirm-box .actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+.spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.2); border-top-color: currentColor;
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.logout-link { color: var(--text-muted); font-size: 13px; cursor: pointer; background: none; border: none; font-family: inherit; }
+.logout-link:hover { color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; } }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+const $ = (sel, root) => (root || document).querySelector(sel);
+const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+
+async function api(path, options) {
+  const res = await fetch(path, Object.assign({
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin'
+  }, options || {}));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || 'request_failed'), { status: res.status, data });
+  return data;
+}
+
+let state = { screen: 'loading', activeTab: 'status' };
+
+function render() {
+  const app = $('#app');
+  if (state.screen === 'loading') {
+    app.innerHTML = '<div class="auth-screen"><div class="spinner"></div></div>';
+  } else if (state.screen === 'setup') {
+    renderSetup(app);
+  } else if (state.screen === 'login') {
+    renderLogin(app);
+  } else if (state.screen === 'dashboard') {
+    renderDashboard(app);
+  }
+}
+
+function renderSetup(app) {
+  app.innerHTML = `
+    <div class="auth-screen">
+      <div class="auth-card">
+        <h1>初始化管理面板</h1>
+        <p class="sub">第一次使用，请设置一个管理密码（至少 6 位）</p>
+        <div class="field">
+          <label>设置密码</label>
+          <input type="password" id="setup-pw" placeholder="至少 6 位字符" autocomplete="new-password">
+        </div>
+        <button class="btn full" id="setup-btn">创建并登录</button>
+        <div class="error-msg" id="setup-err"></div>
+      </div>
+    </div>
+  `;
+  const btn = $('#setup-btn');
+  const pwInput = $('#setup-pw');
+  const submit = async () => {
+    const password = pwInput.value.trim();
+    if (!password) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      await api('/api/admin/auth/setup', { method: 'POST', body: JSON.stringify({ password }) });
+      state.screen = 'dashboard';
+      await loadDashboardData();
+      render();
+    } catch (err) {
+      $('#setup-err').textContent = err.data && err.data.error === 'password_too_short' ? '密码至少需要 6 位' : '创建失败，请重试';
+      btn.disabled = false;
+      btn.textContent = '创建并登录';
+    }
+  };
+  btn.addEventListener('click', submit);
+  pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  pwInput.focus();
+}
+
+function renderLogin(app) {
+  app.innerHTML = `
+    <div class="auth-screen">
+      <div class="auth-card">
+        <h1>管理面板登录</h1>
+        <p class="sub">请输入管理密码</p>
+        <div class="field">
+          <label>密码</label>
+          <input type="password" id="login-pw" placeholder="密码" autocomplete="current-password">
+        </div>
+        <button class="btn full" id="login-btn">登录</button>
+        <div class="error-msg" id="login-err"></div>
+      </div>
+    </div>
+  `;
+  const btn = $('#login-btn');
+  const pwInput = $('#login-pw');
+  const submit = async () => {
+    const password = pwInput.value.trim();
+    if (!password) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      await api('/api/admin/auth/login', { method: 'POST', body: JSON.stringify({ password }) });
+      state.screen = 'dashboard';
+      await loadDashboardData();
+      render();
+    } catch (err) {
+      $('#login-err').textContent = '密码不正确';
+      btn.disabled = false;
+      btn.textContent = '登录';
+    }
+  };
+  btn.addEventListener('click', submit);
+  pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  pwInput.focus();
+}
+
+let dashData = { status: null, stats: null, users: [], settings: null };
+
+async function loadDashboardData() {
+  const [status, stats, users, settings] = await Promise.all([
+    api('/api/admin/status').catch(() => null),
+    api('/api/admin/stats').catch(() => null),
+    api('/api/admin/users').catch(() => ({ users: [] })),
+    api('/api/admin/settings').catch(() => null)
+  ]);
+  dashData.status = status;
+  dashData.stats = stats;
+  dashData.users = users.users || [];
+  dashData.settings = settings;
+}
+
+function fmtTime(ts) {
+  if (!ts) return '-';
+  return new Date(ts).toLocaleString('zh-CN', { hour12: false });
+}
+
+function renderDashboard(app) {
+  app.innerHTML = `
+    <div class="container">
+      <div class="topbar">
+        <h1><span class="dot" id="status-dot"></span> Bot 管理面板</h1>
+        <button class="logout-link" id="logout-btn">退出登录</button>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn" data-tab="status">服务状态</button>
+        <button class="tab-btn" data-tab="settings">变量管理</button>
+        <button class="tab-btn" data-tab="users">用户管理</button>
+      </div>
+      <div class="tab-panel" data-panel="status"></div>
+      <div class="tab-panel" data-panel="settings"></div>
+      <div class="tab-panel" data-panel="users"></div>
+    </div>
+  `;
+
+  $('#logout-btn').addEventListener('click', async () => {
+    await api('/api/admin/auth/logout', { method: 'POST' }).catch(() => {});
+    state.screen = 'login';
+    render();
+  });
+
+  $$('.tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.activeTab = btn.dataset.tab;
+      applyTab();
+    });
+  });
+
+  renderStatusPanel();
+  renderSettingsPanel();
+  renderUsersPanel();
+  applyTab();
+}
+
+function applyTab() {
+  $$('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === state.activeTab));
+  $$('.tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === state.activeTab));
+}
+
+function renderStatusPanel() {
+  const panel = $('[data-panel="status"]');
+  const s = dashData.status;
+  const webhookOk = s && s.webhook && s.webhook.ok && s.webhook.url;
+  $('#status-dot').classList.toggle('off', !webhookOk);
+
+  if (!s) {
+    panel.innerHTML = '<div class="empty-hint">状态加载失败，请刷新重试</div>';
+    return;
+  }
+
+  panel.innerHTML = `
+    <div class="grid-cards">
+      <div class="card">
+        <div class="label">Webhook 状态</div>
+        <div class="value small">${webhookOk ? '正常连接' : '未连接'}</div>
+        <div class="sub">${s.webhook.pending_update_count != null ? '待处理：' + s.webhook.pending_update_count : ''}</div>
+      </div>
+      <div class="card">
+        <div class="label">今日消息数</div>
+        <div class="value">${s.todayMessages}</div>
+      </div>
+      <div class="card">
+        <div class="label">已知用户数</div>
+        <div class="value">${s.totalUsers}</div>
+      </div>
+      <div class="card">
+        <div class="label">当前默认模型</div>
+        <div class="value small">${s.currentModel}</div>
+      </div>
+      <div class="card">
+        <div class="label">联网搜索</div>
+        <div class="value small">${s.webSearchConfigured ? '已配置' : '未配置密钥'}</div>
+      </div>
+      <div class="card">
+        <div class="label">群聊@限制</div>
+        <div class="value small">${s.groupMentionRequired ? '需要@才回复' : '无限制'}</div>
+      </div>
+      <div class="card">
+        <div class="label">限流</div>
+        <div class="value small">每分钟 ${s.rateLimitPerMinute} 次</div>
+      </div>
+      <div class="card">
+        <div class="label">最大历史消息数</div>
+        <div class="value small">${s.maxHistory} 条</div>
+      </div>
+    </div>
+    <div class="section-title">模型使用分布</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>模型</th><th>调用次数</th></tr></thead>
+        <tbody id="model-stats-body"></tbody>
+      </table>
+    </div>
+    <div class="section-title">近期消息趋势</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>消息数</th></tr></thead>
+        <tbody id="history-stats-body"></tbody>
+      </table>
+    </div>
+  `;
+
+  const modelBody = $('#model-stats-body');
+  const modelStats = (dashData.stats && dashData.stats.modelStats) || {};
+  const entries = Object.entries(modelStats).sort((a, b) => b[1] - a[1]);
+  modelBody.innerHTML = entries.length
+    ? entries.map(([id, count]) => `<tr><td>${id}</td><td>${count}</td></tr>`).join('')
+    : '<tr><td colspan="2" class="empty-hint">暂无数据</td></tr>';
+
+  const historyBody = $('#history-stats-body');
+  const history = (dashData.stats && dashData.stats.history) || [];
+  historyBody.innerHTML = history.length
+    ? history.slice().reverse().map((h) => `<tr><td>${h.date}</td><td>${h.messageCount}</td></tr>`).join('')
+    : '<tr><td colspan="2" class="empty-hint">暂无数据</td></tr>';
+}
+
+function renderSettingsPanel() {
+  const panel = $('[data-panel="settings"]');
+  const settingsData = dashData.settings;
+
+  if (!settingsData) {
+    panel.innerHTML = '<div class="empty-hint">变量加载失败，请刷新重试</div>';
+    return;
+  }
+
+  const rowsHtml = settingsData.meta.map((meta) => {
+    const currentVal = settingsData.values[meta.key] || '';
+    const hasVal = settingsData.hasValue[meta.key];
+    const inputId = 'setting-' + meta.key;
+
+    let fieldHtml = '';
+    if (meta.type === 'boolean') {
+      const isOn = currentVal === 'true';
+      fieldHtml = `<div class="toggle ${isOn ? 'on' : ''}" id="${inputId}" data-key="${meta.key}"><div class="knob"></div></div>`;
+    } else if (meta.type === 'textarea') {
+      fieldHtml = `<textarea id="${inputId}" data-key="${meta.key}" placeholder="${meta.placeholder || ''}">${meta.sensitive ? '' : escapeHtml(currentVal)}</textarea>`;
+    } else {
+      const inputType = meta.sensitive ? 'password' : (meta.type === 'number' ? 'number' : 'text');
+      fieldHtml = `<input type="${inputType}" id="${inputId}" data-key="${meta.key}" placeholder="${meta.sensitive && hasVal ? currentVal : (meta.placeholder || '')}" value="${meta.sensitive ? '' : escapeHtml(currentVal)}">`;
+    }
+
+    return `
+      <div class="setting-row" data-row="${meta.key}">
+        <div class="head">
+          <span class="title">${meta.label}</span>
+          <span class="badge ${hasVal ? 'on' : ''}">${hasVal ? '已自定义' : '使用默认值'}</span>
+        </div>
+        <div class="desc">${meta.description}</div>
+        ${meta.type !== 'boolean' ? `<div class="field">${fieldHtml}</div>` : `<div style="margin-bottom:10px">${fieldHtml}</div>`}
+        <div class="row-actions">
+          <button class="btn small save-setting-btn" data-key="${meta.key}">保存</button>
+          ${hasVal ? `<button class="btn small secondary reset-setting-btn" data-key="${meta.key}">恢复默认</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="section-title">动态变量管理</div>
+    <p style="color:var(--text-muted);font-size:12px;margin-bottom:16px">这些变量存在 KV 里，保存后立即生效，不需要重新部署。留空并保存等于恢复默认值。</p>
+    ${rowsHtml}
+  `;
+
+  $$('.toggle', panel).forEach((toggle) => {
+    toggle.addEventListener('click', () => toggle.classList.toggle('on'));
+  });
+
+  $$('.save-setting-btn', panel).forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const key = btn.dataset.key;
+      const meta = settingsData.meta.find((m) => m.key === key);
+      const el = $('#setting-' + key);
+      let value;
+      if (meta.type === 'boolean') {
+        value = el.classList.contains('on') ? 'true' : 'false';
+      } else {
+        value = el.value.trim();
+      }
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.innerHTML = '<span class="spinner"></span>';
+      try {
+        const res = await api('/api/admin/settings', { method: 'POST', body: JSON.stringify({ [key]: value }) });
+        dashData.settings.values = res.values;
+        dashData.settings.hasValue[key] = Boolean(res.values[key]);
+        renderSettingsPanel();
+      } catch {
+        btn.textContent = '保存失败';
+        setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 1500);
+      }
+    });
+  });
+
+  $$('.reset-setting-btn', panel).forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const key = btn.dataset.key;
+      btn.disabled = true;
+      try {
+        const res = await api('/api/admin/settings/' + key + '/reset', { method: 'POST' });
+        dashData.settings.values = res.values;
+        dashData.settings.hasValue[key] = Boolean(res.values[key]);
+        renderSettingsPanel();
+      } catch {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function renderUsersPanel() {
+  const panel = $('[data-panel="users"]');
+  const users = dashData.users;
+
+  panel.innerHTML = `
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>用户列表（共 ${users.length} 人）</span>
+      <button class="btn danger small" id="clear-all-btn">一键清空全部对话上下文</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>用户</th><th>用户 ID</th><th>今日用量</th><th>最后活跃</th><th>状态</th><th>操作</th></tr>
+        </thead>
+        <tbody id="users-body"></tbody>
+      </table>
+    </div>
+  `;
+
+  const body = $('#users-body');
+  body.innerHTML = users.length
+    ? users.map((u) => `
+      <tr>
+        <td>${u.firstName || '-'}${u.username ? ' (@' + u.username + ')' : ''}</td>
+        <td>${u.userId}</td>
+        <td>${u.todayUsage}</td>
+        <td>${fmtTime(u.lastSeenAt)}</td>
+        <td>${u.banned ? '<span class="badge" style="color:var(--error)">已封禁</span>' : '<span class="badge on">正常</span>'}</td>
+        <td>
+          <button class="btn small secondary clear-user-btn" data-userid="${u.userId}">清历史</button>
+          ${u.banned
+            ? `<button class="btn small secondary unban-btn" data-userid="${u.userId}">解封</button>`
+            : `<button class="btn small secondary ban-btn" data-userid="${u.userId}">封禁</button>`}
+        </td>
+      </tr>
+    `).join('')
+    : '<tr><td colspan="6" class="empty-hint">暂无用户数据</td></tr>';
+
+  $('#clear-all-btn').addEventListener('click', () => {
+    showConfirm(
+      '一键清空全部对话上下文',
+      `这会清空所有 ${users.length} 位用户当前保存的对话历史，无法撤销。确定继续吗？`,
+      async () => {
+        await api('/api/admin/history/clear-all', { method: 'POST' });
+      }
+    );
+  });
+
+  $$('.clear-user-btn', body).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const userId = btn.dataset.userid;
+      showConfirm('清空该用户对话上下文', '确定要清空用户 ' + userId + ' 的对话历史吗？', async () => {
+        await api('/api/admin/users/' + userId + '/clear-history', { method: 'POST' });
+      });
+    });
+  });
+
+  $$('.ban-btn', body).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const userId = btn.dataset.userid;
+      showConfirm('封禁该用户', '确定要封禁用户 ' + userId + ' 吗？（永久封禁，可随时解封）', async () => {
+        await api('/api/admin/users/' + userId + '/ban', { method: 'POST', body: JSON.stringify({}) });
+        await refreshUsers();
+      });
+    });
+  });
+
+  $$('.unban-btn', body).forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const userId = btn.dataset.userid;
+      await api('/api/admin/users/' + userId + '/unban', { method: 'POST' });
+      await refreshUsers();
+    });
+  });
+}
+
+async function refreshUsers() {
+  const res = await api('/api/admin/users').catch(() => ({ users: [] }));
+  dashData.users = res.users || [];
+  renderUsersPanel();
+}
+
+function showConfirm(title, message, onConfirm) {
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <h3>${title}</h3>
+      <p>${message}</p>
+      <div class="actions">
+        <button class="btn secondary" id="confirm-cancel">取消</button>
+        <button class="btn danger" id="confirm-ok">确定</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  $('#confirm-cancel', overlay).addEventListener('click', () => overlay.remove());
+  $('#confirm-ok', overlay).addEventListener('click', async () => {
+    const okBtn = $('#confirm-ok', overlay);
+    okBtn.disabled = true;
+    okBtn.innerHTML = '<span class="spinner"></span>';
+    try {
+      await onConfirm();
+      overlay.remove();
+      await loadDashboardData();
+      renderStatusPanel();
+      renderSettingsPanel();
+      renderUsersPanel();
+    } catch {
+      okBtn.textContent = '操作失败';
+      setTimeout(() => overlay.remove(), 1200);
+    }
+  });
+}
+
+async function init() {
+  try {
+    const status = await api('/api/admin/auth/status');
+    if (!status.initialized) {
+      state.screen = 'setup';
+    } else if (status.loggedIn) {
+      state.screen = 'dashboard';
+      await loadDashboardData();
+    } else {
+      state.screen = 'login';
+    }
+  } catch {
+    state.screen = 'login';
+  }
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
