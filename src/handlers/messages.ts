@@ -17,6 +17,8 @@ import { transcribeAudio } from '../services/transcribe';
 import { resolveSystemPrompt } from '../config/personas';
 import { searchWeb, buildSearchContext } from '../services/search';
 import { recordNeuronUsage, estimateChatNeurons, WHISPER_NEURONS_PER_MINUTE } from '../storage/neurons-store';
+import { recordActivityAndCount, shouldAlertAndMark } from '../storage/anomaly-store';
+import { parseCsvNumbers } from '../utils/access';
 import type { ChatMessage } from '../types/env';
 
 const EDIT_INTERVAL_MS = 1400;
@@ -40,6 +42,20 @@ export async function runAiTurn(
   if (!rate.ok) {
     await ctx.reply(`请求太频繁了，请稍后再试。限制：每分钟 ${rate.limit} 次。`);
     return;
+  }
+
+  // 异常检测：5 分钟内请求次数超过阈值时，通知管理员（同一用户 30 分钟内最多告警一次）。
+  const ANOMALY_THRESHOLD = 20;
+  const recentCount = await recordActivityAndCount(ctx.env, userId);
+  if (recentCount >= ANOMALY_THRESHOLD) {
+    const shouldAlert = await shouldAlertAndMark(ctx.env, userId);
+    if (shouldAlert) {
+      const admins = parseCsvNumbers(ctx.env.ADMIN_USER_IDS);
+      const alertText = `⚠ 异常请求告警\n用户 ${userId} 在 5 分钟内发起了 ${recentCount} 次请求，可能存在滥用或攻击行为。\n可使用 /ban ${userId} 30 异常请求 进行临时禁用。`;
+      for (const adminId of admins) {
+        ctx.api.sendMessage(adminId, alertText).catch(() => {});
+      }
+    }
   }
 
   await ctx.api.sendChatAction(chatId, 'typing');
