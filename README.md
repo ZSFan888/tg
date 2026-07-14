@@ -9,19 +9,35 @@
 - Cloudflare KV 持久化聊天上下文
 - 用户级白名单
 - 简单限流
+- 用户级回复风格设置（默认 / 极简 / 专业 / 幽默）
 
 ## 已实现功能
 
 - `/start`：欢迎消息 + 菜单按钮
 - `/help`：帮助说明
 - `/chat`：提示进入聊天模式
+- `/settings`：切换回复风格（按钮式菜单，选择后立即生效并持久化）
 - `/clear`：清空当前聊天上下文
 - `/model`：查看当前模型
 - `/ping`：健康检查
-- 文本消息自动调用 Workers AI，并按用户存最近几轮上下文
+- 文本消息自动调用 Workers AI，按用户存最近几轮上下文，并套用该用户当前选择的回复风格
 - 可选 `ALLOWED_USER_IDS` 白名单，只允许指定用户使用
+- AI 调用失败时会返回友好提示，不会让请求裸奔报错
 
 这个版本只处理私聊，没有任何群管理相关命令或逻辑。
+
+## 回复风格
+
+在 `/settings` 里可以在四种风格间切换，选择会按用户 id 存进 KV，长期生效：
+
+| 风格 | 说明 |
+|---|---|
+| 默认助手 | 简洁友好，中文优先 |
+| 极简模式 | 1-2 句话内给结论 |
+| 专业模式 | 结构化、分点、避免口语化 |
+| 幽默模式 | 轻松语气 + 恰当比喻 |
+
+风格定义在 `src/config/personas.ts`，可以直接改文案或加新风格。
 
 ## 目录
 
@@ -30,6 +46,8 @@ src/
   bot/
     context.ts
     create-bot.ts
+  config/
+    personas.ts
   handlers/
     callbacks.ts
     commands.ts
@@ -38,6 +56,7 @@ src/
     ai.ts
   storage/
     chat-store.ts
+    preferences-store.ts
     rate-limit.ts
   types/
     env.ts
@@ -110,6 +129,6 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
 ## 7. 下一步建议
 
 - 用 conversations 插件做多步表单（比如收集用户偏好）
-- 按用户角色路由不同模型
-- 加使用统计和配额管理
 - 加语音消息转文字支持
+- 加使用统计和配额管理面板
+- 支持用户自定义系统提示词（而不只是预设风格）

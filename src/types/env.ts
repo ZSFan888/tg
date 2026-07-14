@@ -27,3 +27,10 @@ export interface RateLimitState {
   count: number;
   resetAt: number;
 }
+
+export type PersonaKey = 'default' | 'concise' | 'professional' | 'humorous';
+
+export interface UserPreferences {
+  persona: PersonaKey;
+  updatedAt: number;
+}

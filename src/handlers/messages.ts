@@ -3,6 +3,8 @@ import type { BotContext } from '../bot/context';
 import { generateReply } from '../services/ai';
 import { getChatHistory, saveChatHistory } from '../storage/chat-store';
 import { checkRateLimit } from '../storage/rate-limit';
+import { getUserPreferences } from '../storage/preferences-store';
+import { getPersona } from '../config/personas';
 import { isUserAllowed } from '../utils/access';
 
 export function registerMessages(bot: Bot<BotContext>) {
@@ -22,8 +24,11 @@ export function registerMessages(bot: Bot<BotContext>) {
 
     await ctx.api.sendChatAction(ctx.chat.id, 'typing');
 
+    const prefs = ctx.from ? await getUserPreferences(ctx.env, ctx.from.id) : { persona: 'default' as const };
+    const persona = getPersona(prefs.persona);
+
     const history = await getChatHistory(ctx.env, ctx.chat.id);
-    const reply = await generateReply(ctx.env, history, text);
+    const reply = await generateReply(ctx.env, history, text, persona.prompt);
 
     await ctx.reply(reply, {
       reply_parameters: {

@@ -30,14 +30,24 @@ function readResponse(result: unknown): string {
   return '';
 }
 
-export async function generateReply(env: Env, history: ChatMessage[], input: string) {
+export async function generateReply(
+  env: Env,
+  history: ChatMessage[],
+  input: string,
+  systemPrompt: string
+) {
   const messages = trimMessages([
-    { role: 'system', content: env.SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
     ...history,
     { role: 'user', content: input }
   ]);
 
-  const result = await env.AI.run(env.AI_MODEL, { messages });
-  const output = readResponse(result).trim();
-  return output || '我现在有点忙，请你换个问法再试一次。';
+  try {
+    const result = await env.AI.run(env.AI_MODEL, { messages });
+    const output = readResponse(result).trim();
+    return output || '我现在有点忙，请你换个问法再试一次。';
+  } catch (err) {
+    console.error('AI generation failed:', err);
+    return '抱歉，AI 服务暂时出了点问题，请稍后再试。';
+  }
 }
