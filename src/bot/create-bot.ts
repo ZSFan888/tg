@@ -4,7 +4,6 @@ import type { BotContext } from './context';
 import { registerCommands } from '../handlers/commands';
 import { registerCallbacks } from '../handlers/callbacks';
 import { registerMessages } from '../handlers/messages';
-import { registerAdminCommands } from '../handlers/admin';
 
 export function createBot(env: Env) {
   const bot = new Bot<BotContext>(env.BOT_TOKEN);
@@ -15,7 +14,6 @@ export function createBot(env: Env) {
   });
 
   registerCommands(bot);
-  registerAdminCommands(bot);
   registerCallbacks(bot);
   registerMessages(bot);
 

@@ -15,14 +15,10 @@
   },
   "vars": {
     "BOT_WEBHOOK_PATH": "/telegram/webhook",
-    "BOT_USERNAME": "",
-    "ALLOWED_CHAT_IDS": "",
-    "ADMIN_USER_IDS": "",
-    "MAX_WARNINGS": "3",
+    "ALLOWED_USER_IDS": "",
     "AI_MODEL": "@cf/meta/llama-3.2-1b-instruct",
-    "SYSTEM_PROMPT": "你是一个简洁、友好的 Telegram 助手。优先用中文回答，回答要直接，不要废话。",
+    "SYSTEM_PROMPT": "你是一个简洁、友好的 Telegram 私聊助手。优先用中文回答，回答要直接，不要废话。",
     "MAX_HISTORY": "8",
-    "RATE_LIMIT_PER_MINUTE": "12",
-    "GROUP_MENTION_REQUIRED": "true"
+    "RATE_LIMIT_PER_MINUTE": "12"
   }
 }
