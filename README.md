@@ -194,10 +194,17 @@ curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
 
 **Worker 打开显示 Error 1101（Worker threw exception）**
 
-几乎总是因为绑定没配对，逐个检查：
-- `BOT_KV` 绑定是否已经创建（回第 4 步在"绑定"页面添加 KV 命名空间绑定，绑定名必须是 `BOT_KV`）
-- 绑定完是否重新触发了一次部署（新绑定要重新部署才生效）
-- `BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET` 是否已经在"变量和机密"里正确保存为 Secret 类型
+最常见的原因不是没填变量，而是**填了但被自动部署清空了**。Cloudflare 的"连接到 Git"机制默认每次部署都会用 `wrangler.jsonc` 覆盖所有配置，Secret 类的变量如果没写在配置文件里，会在下一次自动部署时被静默清空——哪怕你之前手动加过。
+
+本仓库的 `wrangler.jsonc` 已经加了 `"keep_vars": true` 这个开关，作用是告诉 Cloudflare"保留 Dashboard 里手动设置的变量，部署时不要覆盖它们"。如果你的 fork 是在这次更新之前创建的，需要同步一次最新代码：
+
+1. 打开你 fork 的仓库页面，点击 **Sync fork → Update branch**，同步最新的 `wrangler.jsonc`
+2. 同步后会自动触发一次新部署，等它跑完
+3. 重新去"变量和机密"页面，把 `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET` **再填一次**（这一次填完不会再被清空）
+4. 确认页面上显示"2 个已加密变量"而不是"无"
+
+其余检查项：
+- `BOT_KV` 绑定是否已经创建（在"绑定"页面添加 KV 命名空间绑定，绑定名必须是 `BOT_KV`）
 - Workers AI 绑定（名叫 `AI`）是否存在
 
 **机器人在 Telegram 里没有任何回复**
