@@ -6,6 +6,7 @@
 - grammY
 - Hono
 - Workers AI（默认免费模型 `@cf/meta/llama-3.2-1b-instruct`）
+- 流式回复（打字机效果，边生成边显示）
 - Cloudflare KV 持久化聊天上下文
 - 用户级白名单
 - 简单限流
@@ -24,10 +25,19 @@
 - `/model`：查看当前模型
 - `/ping`：健康检查
 - 文本消息自动调用 Workers AI，按用户存最近几轮上下文，并套用该用户当前选择的回复风格
+- **流式回复**：AI 生成过程中机器人会持续编辑同一条消息，模拟打字机效果，而不是等全部生成完才发送
 - 可选 `ALLOWED_USER_IDS` 白名单，只允许指定用户使用
 - AI 调用失败时会返回友好提示，不会让请求裸奔报错
 
 这个版本只处理私聊，没有任何群管理相关命令或逻辑。
+
+## 流式回复实现原理
+
+Workers AI 支持 `stream: true` 参数，返回一个 SSE（Server-Sent Events）格式的 `ReadableStream`。机器人读取这个流，每收到一段文字增量就拼接到已有文本上，并通过节流（默认 1.4 秒一次）调用 Telegram 的 `editMessageText` 更新同一条消息，生成完成后做最后一次强制编辑去掉打字光标。
+
+节流是必须的：Telegram 对同一条消息的编辑频率有限制，过于频繁的 `editMessageText` 调用会被限流或报错。`src/utils/throttle.ts` 实现了一个简单的节流器，`EDIT_INTERVAL_MS`（在 `messages.ts` 里）控制编辑间隔，可以按需调整——数值越小打字机效果越流畅，但越容易触发 Telegram 限流。
+
+如果 Workers AI 某个模型不支持流式返回（返回的不是 `ReadableStream`），代码会自动降级为一次性返回完整文本，不会报错。
 
 ## 回复风格
 
@@ -52,7 +62,7 @@
 
 ## 使用统计
 
-`/usage` 或点击"使用统计"按钮会显示当天已调用 AI 的次数，数据按用户 id + 日期存储，每天 UTC 零点自动重置（KV TTL 2 天，避免残留旧数据）。这个功能主要用于自己观察使用量，避免超出 Workers AI 每天 10000 Neurons 的免费额度。
+`/usage` 或点击"使用统计"按钮会显示当天已调用 AI 的次数，数据按用户 id + 日期存储，每天自动重置。这个功能主要用于自己观察使用量，避免超出 Workers AI 每天 10000 Neurons 的免费额度。
 
 ## 目录
 
@@ -79,6 +89,7 @@ src/
     env.ts
   utils/
     access.ts
+    throttle.ts
   index.ts
 ```
 
