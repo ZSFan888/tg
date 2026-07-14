@@ -39,11 +39,11 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
     const keyboard = new InlineKeyboard();
     for (const persona of listPersonas()) {
-      const label = persona.key === prefs.persona ? `[当前] ${persona.label}` : persona.label;
+      const label = persona.key === prefs.persona ? `» ${persona.label}` : persona.label;
       keyboard.text(label, `persona:${persona.key}`).row();
     }
     keyboard.text(
-      prefs.persona === 'custom' ? '[当前] 自定义模式' : '自定义模式（输入你自己的提示词）',
+      prefs.persona === 'custom' ? '» 自定义模式' : '自定义模式（输入你自己的提示词）',
       'menu:setprompt'
     );
 
