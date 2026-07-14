@@ -51,7 +51,7 @@
    - 勾选你刚 fork 出来的仓库（`你的用户名/tg`）
    - 点击 **Install & Authorize**
 6. 授权完成后回到 Cloudflare，从列表里选中你 fork 的仓库，点击 **开始设置 (Begin setup)**
-7. 在构建设置里填：
+7. 在构建设置里填（**这三项都必须明确填写，不能留空**，留空 Cloudflare 会直接跳过依赖安装，导致打包时找不到 grammy/hono 报错）：
    - 框架预设：**无 (None)**
    - 构建命令：`npm install`
    - 构建输出目录：`public`
@@ -191,6 +191,10 @@ curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
 ---
 
 ## 常见问题排查
+
+**部署失败，报错 "Could not resolve grammy/hono"**
+
+说明构建时没有执行 `npm install`，`node_modules` 是空的。去 **设置 → 构建 (Builds and deployments) → 构建配置**，确认"构建命令"这一栏确实填了 `npm install`（不是留空），保存后点 **重试部署**。
 
 **访问 pages.dev 网址或 /healthz 报错**
 
