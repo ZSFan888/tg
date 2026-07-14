@@ -38,88 +38,68 @@
 
 ---
 
-## 第 3 步：在 Cloudflare 创建一个真实的 KV 数据库
+## 第 3 步：在 Cloudflare 创建 Worker 并连接你的 GitHub 仓库
 
-这一步一定要先做，不然 Worker 部署后会直接报错崩溃。
+不需要编辑任何代码文件、不需要手动填 KV ID，全部在界面上点选完成。
 
 1. 登录 [dash.cloudflare.com](https://dash.cloudflare.com)
-2. 左侧菜单找 **Storage & Databases → KV**
-3. 点击 **Create namespace**
-4. 起个名字，比如 `tg-bot-kv`，点击创建
-5. 创建完成后，点进这个命名空间，**复制页面上显示的 Namespace ID**（一长串字母数字），先粘贴到备忘录里，下一步要用
-
----
-
-## 第 4 步：把 KV 的真实 ID 填进你 fork 的仓库
-
-1. 打开你 fork 出来的仓库（`github.com/你的用户名/tg`）
-2. 点击进入 `wrangler.jsonc` 文件
-3. 点击文件右上角的 **铅笔图标（Edit this file）**
-4. 找到这一段：
-   ```jsonc
-   "kv_namespaces": [
-     {
-       "binding": "BOT_KV",
-       "id": "auto-provisioned-on-deploy"
-     }
-   ],
-   ```
-5. 把 `"auto-provisioned-on-deploy"` 替换成第 3 步复制的真实 Namespace ID，例如：
-   ```jsonc
-   "id": "a1b2c3d4e5f6xxxxxxxxxxxxxxxxxxxx"
-   ```
-6. 拉到页面底部，点击 **Commit changes...**，保持默认选项，直接点绿色的 **Commit changes** 按钮保存
-
-这一步全程在网页上编辑 GitHub 文件完成，不需要下载任何东西。
-
----
-
-## 第 5 步：在 Cloudflare 创建 Worker 并连接你的 GitHub 仓库
-
-1. 回到 Cloudflare Dashboard，左侧菜单点 **计算 (Workers) → Workers 和 Pages**
-2. 点击 **创建 (Create)**
-3. 选择 **连接到 Git (Connect to Git)**，不要选"克隆存储库 URL"或模板
-4. 如果还没授权 GitHub，会跳转到 GitHub 走一次授权流程：
+2. 左侧菜单点 **计算 (Workers) → Workers 和 Pages**
+3. 点击 **创建 (Create)**
+4. 选择 **连接到 Git (Connect to Git)**，不要选"克隆存储库 URL"或模板
+5. 如果还没授权 GitHub，会跳转到 GitHub 走一次授权流程：
    - 选择 **Only select repositories**
    - 勾选你刚 fork 出来的仓库（`你的用户名/tg`）
    - 点击 **Install & Authorize**
-5. 授权完成后回到 Cloudflare，从列表里选中你 fork 的仓库，点击 **继续 (Continue)**
-6. 进入构建配置页面，确认这两项（通常会自动识别，不用改）：
+6. 授权完成后回到 Cloudflare，从列表里选中你 fork 的仓库，点击 **继续 (Continue)**
+7. 进入构建配置页面，确认这两项（通常会自动识别，不用改）：
    - 构建命令：留空或 `npm install`
    - 部署命令：`npx wrangler deploy`
-7. **暂时不要点部署**，先点击下方的 **变量和机密 (Variables and Secrets)**，添加两个 Secret：
+8. 点击下方的 **变量和机密 (Variables and Secrets)**，添加两个 Secret：
    - 名称 `BOT_TOKEN`，值填第 1 步拿到的 Token
    - 名称 `TELEGRAM_WEBHOOK_SECRET`，值随便填一段随机字符串（比如 `myBot2026SecretKey888`），自己记住，下面还要用一次
-8. 确认无误后点击 **保存并部署 (Save and Deploy)**
+9. 点击 **保存并部署 (Save and Deploy)**
 
-Cloudflare 会自动拉取你 fork 的仓库代码，读取 `wrangler.jsonc` 里的配置（包括你在第 4 步填的真实 KV id），完成构建和发布。
+第一次部署此时会成功，但因为还没绑定 KV，机器人的记忆和统计功能暂时不能用——下一步马上加上。
 
 ---
 
-## 第 6 步：确认部署成功
+## 第 4 步：创建 KV 数据库并直接绑定（不用填 ID）
 
-部署完成后，页面会显示一个 Worker 网址，类似：
+1. 部署完成后，进入这个 Worker 的详情页
+2. 点击顶部标签栏的 **绑定 (Bindings)**
+3. 点击 **添加绑定 (Add binding)**，类型选择 **KV 命名空间 (KV Namespace)**
+4. 绑定名称填 `BOT_KV`（必须完全一致）
+5. 在"选择 KV 命名空间"这一步，点击 **创建新的命名空间 (Create new)**，起个名字比如 `tg-bot-kv`，直接创建
+6. Cloudflare 会自动把这个新建的命名空间和 `BOT_KV` 绑定在一起，**全程不需要你复制粘贴任何 ID**
+7. 同一个页面，检查有没有一个类型是 **Workers AI** 的绑定，绑定名叫 `AI`；如果没有，同样点 **添加绑定** 手动加一个
+8. 保存后，回到 **部署 (Deployments)** 标签页，点击最新一次部署旁边的菜单，选择 **重新部署 (Retry deployment)** 或者直接推送一次代码改动触发新部署，让绑定生效
+
+---
+
+## 第 5 步：确认部署成功
+
+访问 Worker 网址，类似：
 
 ```
 https://tg-cf-ai-bot.你的子域名.workers.dev
 ```
 
-点开这个网址，如果看到类似这样的一段文字（JSON 格式），说明部署成功：
+如果看到类似这样的一段文字（JSON 格式），说明部署成功：
 
 ```json
 {"ok":true,"service":"tg-cf-ai-bot"}
 ```
 
-如果看到 **Error 1101**，说明有绑定没配置对，回去检查：
-- KV 绑定是不是真实 ID（不是 `auto-provisioned-on-deploy`）
+如果看到 **Error 1101**，回第 4 步检查：
+- `BOT_KV` 绑定是否已经创建并生效（绑定后是否重新部署了一次）
 - `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET` 是否已经在"变量和机密"里保存
-- Workers AI 绑定：进入 Worker 详情页 → **绑定** 标签，检查有没有一个类型是 **Workers AI**、绑定名叫 `AI` 的项，如果没有点 **添加绑定** 手动加一个
+- `AI` 绑定（Workers AI 类型）是否存在
 
 **把这个网址完整复制下来**，下一步注册 webhook 要用。
 
 ---
 
-## 第 7 步：注册 Telegram Webhook
+## 第 6 步：注册 Telegram Webhook
 
 这一步是告诉 Telegram "有新消息时，把消息推送到我的 Worker 地址"。
 
@@ -153,7 +133,7 @@ curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
 
 ---
 
-## 第 8 步：测试机器人
+## 第 7 步：测试机器人
 
 打开 Telegram，搜索你在第 1 步创建的机器人 username，点击进入对话，发送 `/start`。
 
@@ -215,7 +195,8 @@ curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
 **Worker 打开显示 Error 1101（Worker threw exception）**
 
 几乎总是因为绑定没配对，逐个检查：
-- KV 绑定的 ID 是不是还是占位符 `auto-provisioned-on-deploy`（回第 4 步重新填真实 ID）
+- `BOT_KV` 绑定是否已经创建（回第 4 步在"绑定"页面添加 KV 命名空间绑定，绑定名必须是 `BOT_KV`）
+- 绑定完是否重新触发了一次部署（新绑定要重新部署才生效）
 - `BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET` 是否已经在"变量和机密"里正确保存为 Secret 类型
 - Workers AI 绑定（名叫 `AI`）是否存在
 

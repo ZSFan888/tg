@@ -4,12 +4,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-07-14",
   "compatibility_flags": ["nodejs_compat"],
-  "kv_namespaces": [
-    {
-      "binding": "BOT_KV",
-      "id": "auto-provisioned-on-deploy"
-    }
-  ],
   "ai": {
     "binding": "AI"
   },
