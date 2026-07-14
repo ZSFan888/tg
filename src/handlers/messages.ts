@@ -13,6 +13,7 @@ import { registerKnownUser } from '../storage/users-store';
 import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
 import { sanitizeMarkdown } from '../utils/markdown';
+import { transcribeAudio } from '../services/transcribe';
 import { resolveSystemPrompt } from '../config/personas';
 import { searchWeb, buildSearchContext } from '../services/search';
 import type { ChatMessage } from '../types/env';
@@ -233,5 +234,80 @@ export function registerMessages(bot: Bot<BotContext>) {
 
     const messageId = ctx.message?.message_id ?? ctx.editedMessage?.message_id;
     await runAiTurn(ctx, ctx.chat.id, ctx.from.id, text, messageId, { editedNotice: isEdited });
+  });
+
+  bot.on(['message:voice', 'message:audio'], async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
+
+    const ban = await getBanRecord(ctx.env, ctx.from.id);
+    if (ban) {
+      const until = ban.until ? new Date(ban.until).toLocaleString('zh-CN') : '永久';
+      await ctx.reply(`你已被限制使用这个机器人。\n解除时间：${until}${ban.reason ? `\n原因：${ban.reason}` : ''}`);
+      return;
+    }
+
+    await registerKnownUser(
+      ctx.env,
+      ctx.from.id,
+      ctx.chat.id,
+      ctx.from.username,
+      ctx.from.first_name
+    );
+
+    const fileId = ctx.message?.voice?.file_id ?? ctx.message?.audio?.file_id;
+    if (!fileId) return;
+
+    const statusMsg = await ctx.reply('· 正在转换语音…', {
+      reply_parameters: { message_id: ctx.message!.message_id }
+    });
+
+    let statusActive = true;
+    let statusFrame = 0;
+    const DOT_FRAMES = ['', '.', '..', '...'];
+    const statusInterval = setInterval(() => {
+      if (!statusActive) return;
+      statusFrame = (statusFrame + 1) % DOT_FRAMES.length;
+      ctx.api
+        .editMessageText(ctx.chat!.id, statusMsg.message_id, `· 正在转换语音${DOT_FRAMES[statusFrame]}`)
+        .catch(() => {});
+    }, 900);
+
+    try {
+      const file = await ctx.api.getFile(fileId);
+      if (!file.file_path) {
+        statusActive = false;
+        clearInterval(statusInterval);
+        await ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, '抱歉，无法获取这条语音消息，请重试。');
+        return;
+      }
+
+      const fileUrl = `https://api.telegram.org/file/bot${ctx.env.BOT_TOKEN}/${file.file_path}`;
+      const transcription = await transcribeAudio(ctx.env, fileUrl);
+
+      statusActive = false;
+      clearInterval(statusInterval);
+
+      if (!transcription.ok || !transcription.text) {
+        await ctx.api.editMessageText(
+          ctx.chat.id,
+          statusMsg.message_id,
+          '抱歉，语音识别失败了，请再试一次，或者换成文字发送。'
+        );
+        return;
+      }
+
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        `· 识别结果：${transcription.text}`
+      );
+
+      await runAiTurn(ctx, ctx.chat.id, ctx.from.id, transcription.text, ctx.message!.message_id);
+    } catch (err) {
+      console.error('Voice handling failed:', err);
+      statusActive = false;
+      clearInterval(statusInterval);
+      await ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, '抱歉，处理语音消息时出错了，请稍后再试。').catch(() => {});
+    }
   });
 }
