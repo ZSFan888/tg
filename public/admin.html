@@ -190,6 +190,39 @@ tr:last-child td { border-bottom: none; }
 .logout-link { color: var(--text-muted); font-size: 13px; cursor: pointer; background: none; border: none; font-family: inherit; }
 .logout-link:hover { color: var(--text); }
 
+
+.toast-wrap { position: fixed; top: 20px; right: 20px; z-index: 100; display: flex; flex-direction: column; gap: 10px; }
+.toast {
+  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--success);
+  border-radius: var(--radius); padding: 12px 16px; font-size: 13px; min-width: 220px; max-width: 320px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3); animation: toast-in 0.2s ease;
+}
+.toast.error { border-left-color: var(--error); }
+@keyframes toast-in { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+.toast.leaving { animation: toast-out 0.2s ease forwards; }
+@keyframes toast-out { to { opacity: 0; transform: translateX(20px); } }
+
+.refresh-btn { display: inline-flex; align-items: center; gap: 6px; }
+.refresh-btn svg { transition: transform 0.3s ease; }
+.refresh-btn.spinning svg { animation: spin 0.7s linear infinite; }
+
+.search-field { margin-bottom: 14px; }
+.search-field input {
+  width: 100%; max-width: 280px; background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); padding: 8px 12px; border-radius: var(--radius); font-size: 13px; font-family: inherit;
+}
+.search-field input:focus { outline: none; border-color: var(--primary); }
+
+.last-updated { font-size: 12px; color: var(--text-muted); }
+
+@media (max-width: 640px) {
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-btn { flex-shrink: 0; }
+  .topbar { flex-wrap: wrap; gap: 10px; }
+  .toast-wrap { left: 12px; right: 12px; top: 12px; }
+  .toast { max-width: none; }
+}
+
 @media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; } }
 </style>
 </head>
@@ -209,6 +242,23 @@ async function api(path, options) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || 'request_failed'), { status: res.status, data });
   return data;
+}
+
+function showToast(message, isError) {
+  let wrap = $('.toast-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.className = 'toast-wrap';
+    document.body.appendChild(wrap);
+  }
+  const toast = document.createElement('div');
+  toast.className = 'toast' + (isError ? ' error' : '');
+  toast.textContent = message;
+  wrap.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('leaving');
+    setTimeout(() => toast.remove(), 200);
+  }, 2800);
 }
 
 let state = { screen: 'loading', activeTab: 'status' };
@@ -317,6 +367,47 @@ async function loadDashboardData() {
   dashData.settings = settings;
 }
 
+let autoRefreshTimer = null;
+let lastUpdatedAt = null;
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(() => refreshDashboard(false), 30000);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
+function updateLastUpdated() {
+  lastUpdatedAt = Date.now();
+  const el = $('#last-updated');
+  if (el) el.textContent = '更新于 ' + new Date(lastUpdatedAt).toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+async function refreshDashboard(showSpinner) {
+  const btn = $('#refresh-btn');
+  if (showSpinner && btn) btn.classList.add('spinning');
+  try {
+    await loadDashboardData();
+    if (state.screen === 'dashboard') {
+      renderStatusPanel();
+      renderSettingsPanel();
+      renderUsersPanel();
+      applyTab();
+      updateLastUpdated();
+    }
+    if (showSpinner) showToast('已刷新最新数据');
+  } catch {
+    if (showSpinner) showToast('刷新失败，请检查网络', true);
+  } finally {
+    if (showSpinner && btn) btn.classList.remove('spinning');
+  }
+}
+
 function fmtTime(ts) {
   if (!ts) return '-';
   return new Date(ts).toLocaleString('zh-CN', { hour12: false });
@@ -327,7 +418,14 @@ function renderDashboard(app) {
     <div class="container">
       <div class="topbar">
         <h1><span class="dot" id="status-dot"></span> Bot 管理面板</h1>
-        <button class="logout-link" id="logout-btn">退出登录</button>
+        <div style="display:flex;align-items:center;gap:16px">
+          <span class="last-updated" id="last-updated"></span>
+          <button class="btn secondary small refresh-btn" id="refresh-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            刷新
+          </button>
+          <button class="logout-link" id="logout-btn">退出登录</button>
+        </div>
       </div>
       <div class="tabs">
         <button class="tab-btn" data-tab="status">服务状态</button>
@@ -341,10 +439,15 @@ function renderDashboard(app) {
   `;
 
   $('#logout-btn').addEventListener('click', async () => {
+    stopAutoRefresh();
     await api('/api/admin/auth/logout', { method: 'POST' }).catch(() => {});
     state.screen = 'login';
     render();
   });
+
+  $('#refresh-btn').addEventListener('click', () => refreshDashboard(true));
+  updateLastUpdated();
+  startAutoRefresh();
 
   $$('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -511,9 +614,11 @@ function renderSettingsPanel() {
         dashData.settings.values = res.values;
         dashData.settings.hasValue[key] = Boolean(res.values[key]);
         renderSettingsPanel();
+        showToast(meta.label + ' 已保存');
       } catch {
-        btn.textContent = '保存失败';
-        setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 1500);
+        showToast(meta.label + ' 保存失败，请重试', true);
+        btn.textContent = originalText;
+        btn.disabled = false;
       }
     });
   });
@@ -527,7 +632,9 @@ function renderSettingsPanel() {
         dashData.settings.values = res.values;
         dashData.settings.hasValue[key] = Boolean(res.values[key]);
         renderSettingsPanel();
+        showToast('已恢复默认值');
       } catch {
+        showToast('恢复默认失败，请重试', true);
         btn.disabled = false;
       }
     });
@@ -545,9 +652,12 @@ function renderUsersPanel() {
   const users = dashData.users;
 
   panel.innerHTML = `
-    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <span>用户列表（共 ${users.length} 人）</span>
       <button class="btn danger small" id="clear-all-btn">一键清空全部对话上下文</button>
+    </div>
+    <div class="search-field">
+      <input type="text" id="user-search" placeholder="按用户名或 ID 搜索...">
     </div>
     <div class="table-wrap">
       <table>
@@ -559,60 +669,80 @@ function renderUsersPanel() {
     </div>
   `;
 
+  function renderRows(list) {
+    const body = $('#users-body');
+    body.innerHTML = list.length
+      ? list.map((u) => `
+        <tr>
+          <td>${u.firstName || '-'}${u.username ? ' (@' + u.username + ')' : ''}</td>
+          <td>${u.userId}</td>
+          <td>${u.todayUsage}</td>
+          <td>${fmtTime(u.lastSeenAt)}</td>
+          <td>${u.banned ? '<span class="badge" style="color:var(--error)">已封禁</span>' : '<span class="badge on">正常</span>'}</td>
+          <td>
+            <button class="btn small secondary clear-user-btn" data-userid="${u.userId}">清历史</button>
+            ${u.banned
+              ? `<button class="btn small secondary unban-btn" data-userid="${u.userId}">解封</button>`
+              : `<button class="btn small secondary ban-btn" data-userid="${u.userId}">封禁</button>`}
+          </td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="6" class="empty-hint">没有匹配的用户</td></tr>';
+  }
+
+  renderRows(users);
+
+  $('#user-search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    if (!q) { renderRows(users); return; }
+    const filtered = users.filter((u) =>
+      String(u.userId).includes(q) ||
+      (u.username && u.username.toLowerCase().includes(q)) ||
+      (u.firstName && u.firstName.toLowerCase().includes(q))
+    );
+    renderRows(filtered);
+  });
+
   const body = $('#users-body');
-  body.innerHTML = users.length
-    ? users.map((u) => `
-      <tr>
-        <td>${u.firstName || '-'}${u.username ? ' (@' + u.username + ')' : ''}</td>
-        <td>${u.userId}</td>
-        <td>${u.todayUsage}</td>
-        <td>${fmtTime(u.lastSeenAt)}</td>
-        <td>${u.banned ? '<span class="badge" style="color:var(--error)">已封禁</span>' : '<span class="badge on">正常</span>'}</td>
-        <td>
-          <button class="btn small secondary clear-user-btn" data-userid="${u.userId}">清历史</button>
-          ${u.banned
-            ? `<button class="btn small secondary unban-btn" data-userid="${u.userId}">解封</button>`
-            : `<button class="btn small secondary ban-btn" data-userid="${u.userId}">封禁</button>`}
-        </td>
-      </tr>
-    `).join('')
-    : '<tr><td colspan="6" class="empty-hint">暂无用户数据</td></tr>';
+
+  body.addEventListener('click', async (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+    const userId = target.dataset.userid;
+    if (!userId) return;
+
+    if (target.classList.contains('clear-user-btn')) {
+      showConfirm('清空该用户对话上下文', '确定要清空用户 ' + userId + ' 的对话历史吗？', async () => {
+        await api('/api/admin/users/' + userId + '/clear-history', { method: 'POST' });
+        showToast('用户 ' + userId + ' 的对话历史已清空');
+      });
+    } else if (target.classList.contains('ban-btn')) {
+      showConfirm('封禁该用户', '确定要封禁用户 ' + userId + ' 吗？（永久封禁，可随时解封）', async () => {
+        await api('/api/admin/users/' + userId + '/ban', { method: 'POST', body: JSON.stringify({}) });
+        showToast('用户 ' + userId + ' 已封禁');
+      });
+    } else if (target.classList.contains('unban-btn')) {
+      target.disabled = true;
+      try {
+        await api('/api/admin/users/' + userId + '/unban', { method: 'POST' });
+        await refreshUsers();
+        showToast('用户 ' + userId + ' 已解封');
+      } catch {
+        showToast('解封失败，请重试', true);
+        target.disabled = false;
+      }
+    }
+  });
 
   $('#clear-all-btn').addEventListener('click', () => {
     showConfirm(
       '一键清空全部对话上下文',
       `这会清空所有 ${users.length} 位用户当前保存的对话历史，无法撤销。确定继续吗？`,
       async () => {
-        await api('/api/admin/history/clear-all', { method: 'POST' });
+        const res = await api('/api/admin/history/clear-all', { method: 'POST' });
+        showToast('已清空 ' + (res.clearedChats != null ? res.clearedChats : users.length) + ' 个对话的上下文');
       }
     );
-  });
-
-  $$('.clear-user-btn', body).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const userId = btn.dataset.userid;
-      showConfirm('清空该用户对话上下文', '确定要清空用户 ' + userId + ' 的对话历史吗？', async () => {
-        await api('/api/admin/users/' + userId + '/clear-history', { method: 'POST' });
-      });
-    });
-  });
-
-  $$('.ban-btn', body).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const userId = btn.dataset.userid;
-      showConfirm('封禁该用户', '确定要封禁用户 ' + userId + ' 吗？（永久封禁，可随时解封）', async () => {
-        await api('/api/admin/users/' + userId + '/ban', { method: 'POST', body: JSON.stringify({}) });
-        await refreshUsers();
-      });
-    });
-  });
-
-  $$('.unban-btn', body).forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const userId = btn.dataset.userid;
-      await api('/api/admin/users/' + userId + '/unban', { method: 'POST' });
-      await refreshUsers();
-    });
   });
 }
 
@@ -636,22 +766,24 @@ function showConfirm(title, message, onConfirm) {
     </div>
   `;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-  $('#confirm-cancel', overlay).addEventListener('click', () => overlay.remove());
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  const onKeydown = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKeydown); } };
+  document.addEventListener('keydown', onKeydown);
+  $('#confirm-cancel', overlay).addEventListener('click', close);
   $('#confirm-ok', overlay).addEventListener('click', async () => {
     const okBtn = $('#confirm-ok', overlay);
     okBtn.disabled = true;
     okBtn.innerHTML = '<span class="spinner"></span>';
     try {
       await onConfirm();
-      overlay.remove();
-      await loadDashboardData();
-      renderStatusPanel();
-      renderSettingsPanel();
-      renderUsersPanel();
+      close();
+      document.removeEventListener('keydown', onKeydown);
+      await refreshDashboard(false);
     } catch {
-      okBtn.textContent = '操作失败';
-      setTimeout(() => overlay.remove(), 1200);
+      showToast('操作失败，请重试', true);
+      close();
+      document.removeEventListener('keydown', onKeydown);
     }
   });
 }
