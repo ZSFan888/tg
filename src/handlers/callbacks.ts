@@ -7,7 +7,7 @@ import { getUserPreferences, setUserPersona, setUserModel, setWebSearchEnabled }
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
-import { MODELS, getModelById, getModelByKey } from '../config/models';
+import { MODELS, PROVIDERS, getModelById, getModelByKey, getModelsByProvider, getProviderByKey } from '../config/models';
 import { getFollowUps } from '../storage/followup-store';
 import { runAiTurn } from './messages';
 import { isAdmin } from '../utils/access';
@@ -35,13 +35,40 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     const current = getModelById(prefs.modelId ?? ctx.env.AI_MODEL);
 
     const keyboard = new InlineKeyboard();
-    for (const model of MODELS) {
-      const label = model.id === current.id ? `» ${model.label}` : model.label;
-      keyboard.text(label, `model:${model.key}`).row();
+    for (const provider of PROVIDERS) {
+      const count = getModelsByProvider(provider.key).length;
+      const isCurrentProvider = getModelsByProvider(provider.key).some((m) => m.id === current.id);
+      const label = isCurrentProvider ? `» ${provider.label}（${count}）` : `${provider.label}（${count}）`;
+      keyboard.text(label, `modelprovider:${provider.key}`).row();
     }
 
     await ctx.reply(
-      `当前模型：${current.label}\n${current.note}\n\n选择一个新的模型：`,
+      `当前模型：${current.label}\n${current.note}\n\n先选择模型提供商：`,
+      { reply_markup: keyboard }
+    );
+  });
+
+  bot.callbackQuery(/^modelprovider:(.+)$/, async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
+
+    const providerKey = ctx.match[1];
+    const provider = getProviderByKey(providerKey);
+    if (!provider) return;
+
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const current = getModelById(prefs.modelId ?? ctx.env.AI_MODEL);
+    const models = getModelsByProvider(providerKey);
+
+    const keyboard = new InlineKeyboard();
+    for (const model of models) {
+      const label = model.id === current.id ? `» ${model.label}` : model.label;
+      keyboard.text(label, `model:${model.key}`).row();
+    }
+    keyboard.text('« 返回提供商列表', 'menu:model');
+
+    await ctx.reply(
+      `${provider.label} 旗下模型：\n\n选择一个模型：`,
       { reply_markup: keyboard }
     );
   });
