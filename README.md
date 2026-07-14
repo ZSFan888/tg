@@ -182,7 +182,6 @@ https://<你的Pages网址>/setup-menu?secret=<你的TELEGRAM_WEBHOOK_SECRET>
 - **用户禁用**：管理员可以用 `/ban` `/unban` 临时或永久限制某个用户使用机器人
 - **追问生成中提示**：AI 回答完成后，重新生成按钮下方会先显示"追问生成中…"占位，追问按钮生成好后自动替换，不会让人觉得卡住了
 - **持续"正在输入…"状态**：AI 生成回答期间，Telegram 顶部会一直显示"正在输入…"（每 4 秒刷新一次，因为 Telegram 官方这个状态最多维持 5 秒），跟真人打字体验一致，不会中途消失
-- **访问自助申请**：白名单外的用户发消息时，会自动生成一条申请，管理员实时收到带"批准/拒绝"按钮的通知，点一下即可授权，不用去 Cloudflare 后台改环境变量
 
 ---
 
@@ -227,7 +226,7 @@ https://<你的Pages网址>/setup-menu?secret=<你的TELEGRAM_WEBHOOK_SECRET>
 
 部署完成后，去 Worker 详情页 → **设置 → 变量和机密**，可以调整这些非密钥变量（点右边的铅笔图标编辑）：
 
-- `ALLOWED_USER_IDS`：只想让特定人用？填入 Telegram 用户 id，多个用英文逗号分隔，例如 `123456789,987654321`；填 `all` 表示任何人都能用（默认值）。查自己的用户 id 可以找 Telegram 里的 `@userinfobot`。
+- `ALLOWED_USER_IDS`：（已弃用）当前版本机器人对所有人开放，这个变量不再生效，保留只是为了兼容旧配置，可以不用管。
 - `ADMIN_USER_IDS`：管理员的 Telegram 用户 id，多个用英文逗号分隔。填了这个之后，这些用户才能用 `/stats` 和 `/broadcast` 管理员命令，其他人使用会被拒绝。**留空则没有人能用管理员命令**，务必至少填自己的 id。
 - `MAX_HISTORY`：机器人记住最近几轮对话，默认 `8`。
 - `RATE_LIMIT_PER_MINUTE`：每个用户每分钟最多能请求几次 AI，默认 `12`。
@@ -246,8 +245,6 @@ https://<你的Pages网址>/setup-menu?secret=<你的TELEGRAM_WEBHOOK_SECRET>
 | `/broadcast <内容>` | 给所有跟机器人有过互动的用户群发一条系统通知 |
 | `/ban <用户ID> [分钟数] [原因]` | 禁用某个用户，不填分钟数则永久禁用 |
 | `/unban <用户ID>` | 解除对某个用户的禁用 |
-| `/requests` | 查看当前所有待审核的访问申请 |
-| `/revoke <用户ID>` | 撤销通过审批流程批准的用户的访问权限 |
 
 **关于统计范围**：`/stats` 统计的是所有用过 `/start` 或发过消息的用户，不是只统计管理员自己。首次使用建议先跑 `/stats` 确认用户数据已经开始累积，趋势图需要至少两天数据才会显示。
 
@@ -300,10 +297,6 @@ https://<你的Pages网址>/setup-menu?secret=<你的TELEGRAM_WEBHOOK_SECRET>
 **"提取 GitHub 用户或组织详细信息时出错"**
 
 这是 Cloudflare 读取 GitHub 授权信息时的提示，通常不影响实际部署结果，可以先忽略，等部署完成看 pages.dev 网址是否正常访问再判断。如果部署确实失败，去 [github.com/settings/installations](https://github.com/settings/installations) 找到 Cloudflare Workers and Pages，重新确认一下仓库访问权限。
-
-**收到"抱歉，你没有使用这个机器人的权限"**
-
-- 说明 `ALLOWED_USER_IDS` 配置了白名单但你的用户 id 不在里面，去 `@userinfobot` 查一下自己的 id 再加进去，或者直接改成 `all`
 
 **AI 回复很慢或经常报错**
 
