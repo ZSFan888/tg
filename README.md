@@ -2,208 +2,170 @@
 
 一个纯私聊模式的 Telegram AI 机器人，基于 Cloudflare Workers + grammY + Workers AI 构建，支持流式回复、用户级人格设置、自定义提示词和使用量统计。
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ZSFan888/tg)
-
-点击上面的按钮即可一键部署，不需要在本地安装任何工具、不需要用命令行。跟着「一键部署」章节的引导走完，几分钟就能拿到一个能用的机器人。
+本文档使用 **Fork + Connect to Git** 的方式部署，全程在浏览器里完成，不需要安装任何本地工具、不需要用命令行。跟着下面的步骤一步步做，大概 10 分钟能上线。
 
 ---
 
-## 方式一：一键部署（推荐，几分钟搞定）
+## 部署前需要准备的东西
 
-### 你需要先准备一样东西：Bot Token
+1. 一个 **GitHub 账号**（用来 fork 这个仓库）
+2. 一个 **Cloudflare 账号**（免费）：[dash.cloudflare.com/sign-up](https://dash.cloudflare.com/sign-up)
+3. 一个 **Telegram 账号**，用来创建机器人
+
+---
+
+## 第 1 步：创建 Telegram 机器人，拿到 Bot Token
 
 1. 在 Telegram 里搜索并打开 **@BotFather**
-2. 发送 `/newbot`，按提示输入机器人显示名称和 username（username 必须以 `bot` 结尾）
-3. 创建成功后会收到一段文本，里面有一行：
+2. 发送 `/newbot`
+3. 按提示输入机器人的显示名称，再输入 username（必须以 `bot` 结尾，例如 `my_ai_helper_bot`）
+4. 创建成功后会收到一段文本，里面有一行类似：
    ```
    Use this token to access the HTTP API:
    123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    ```
-   把这一整行数字+字母的 token **复制保存**，后面要填。
+   **把这一整行 token 复制保存下来**，后面要填两次。
 
-### 点击部署按钮
+---
 
-点击本文顶部的 **Deploy to Cloudflare** 按钮，会跳转到 Cloudflare 的部署页面：
+## 第 2 步：Fork 这个仓库到你自己的账号
 
-1. 如果还没登录，先登录/注册 Cloudflare 账号（免费）
-2. 授权 Cloudflare 读取你的 GitHub 账号（用于把这个项目 fork 一份到你自己的账号下）
-3. 页面会展示一个配置表单，一共 8 个字段，逐个说明如下：
+1. 打开 [github.com/ZSFan888/tg](https://github.com/ZSFan888/tg)
+2. 点击右上角的 **Fork** 按钮
+3. 保持默认设置，点击 **Create fork**
 
-| 字段名 | 要不要改 | 具体填什么 |
-|---|---|---|
-| `BOT_TOKEN` | **必填** | 粘贴从 @BotFather 拿到的 Token，格式类似 `123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
-| `TELEGRAM_WEBHOOK_SECRET` | **必填** | 随便输入一段随机字符串（比如 `myBot2026SecretKey888`），自己记住即可，20 位以上更安全，注册 webhook 时要再用一次 |
-| `BOT_WEBHOOK_PATH` | 不用改 | 保持默认的 `/telegram/webhook` |
-| `ALLOWED_USER_IDS` | **必填，但可以随便填 `all`** | 这是白名单。Cloudflare 的部署表单不允许这栏留空，如果你想让任何人都能私聊这个机器人，直接填 `all` 即可（机器人代码会识别这个值，等同于不限制）；如果只想自己/特定人用，去 Telegram 找 `@userinfobot` 查用户 id，填进来，多个用英文逗号分隔，例如 `123456789,987654321` |
-| `AI_MODEL` | 不用改 | 保持默认的 `@cf/meta/llama-3.2-1b-instruct`（免费模型） |
-| `SYSTEM_PROMPT` | 不用改 | 保持默认的中文助手人设即可，之后可以在机器人里用 `/settings` 按用户单独切换风格 |
-| `MAX_HISTORY` | 不用改 | 保持默认值 `8`，表示记住最近 8 轮对话 |
-| `RATE_LIMIT_PER_MINUTE` | 不用改 | 保持默认值 `12`，表示每个用户每分钟最多问 12 次 |
+完成后，你会有一份自己名下的仓库副本，地址类似 `github.com/你的用户名/tg`，之后所有配置都在这份副本上进行，不会影响原仓库。
 
-简单说：**必须填的是 `BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET`、`ALLOWED_USER_IDS`（填 `all`）这三项，其他保持默认即可**。
+---
 
-> 如果页面一直提示某个字段不能为空、按钮点了没反应，说明浏览器表单校验卡住了，往上滚动检查是不是有输入框还是空的，Cloudflare 的部署表单目前所有字段都要求填内容，不支持留空提交。
+## 第 3 步：在 Cloudflare 创建一个真实的 KV 数据库
 
-4. 点击 **Deploy**
+这一步一定要先做，不然 Worker 部署后会直接报错崩溃。
 
-Cloudflare 会自动：
-- 把代码 fork 到你的 GitHub 账号
-- 自动创建并绑定 KV 数据库（不需要你手动操作）
-- 自动绑定 Workers AI
-- 构建并发布 Worker
+1. 登录 [dash.cloudflare.com](https://dash.cloudflare.com)
+2. 左侧菜单找 **Storage & Databases → KV**
+3. 点击 **Create namespace**
+4. 起个名字，比如 `tg-bot-kv`，点击创建
+5. 创建完成后，点进这个命名空间，**复制页面上显示的 Namespace ID**（一长串字母数字），先粘贴到备忘录里，下一步要用
 
-几分钟后，部署完成页面会显示你的 Worker 网址，类似：
+---
+
+## 第 4 步：把 KV 的真实 ID 填进你 fork 的仓库
+
+1. 打开你 fork 出来的仓库（`github.com/你的用户名/tg`）
+2. 点击进入 `wrangler.jsonc` 文件
+3. 点击文件右上角的 **铅笔图标（Edit this file）**
+4. 找到这一段：
+   ```jsonc
+   "kv_namespaces": [
+     {
+       "binding": "BOT_KV",
+       "id": "auto-provisioned-on-deploy"
+     }
+   ],
+   ```
+5. 把 `"auto-provisioned-on-deploy"` 替换成第 3 步复制的真实 Namespace ID，例如：
+   ```jsonc
+   "id": "a1b2c3d4e5f6xxxxxxxxxxxxxxxxxxxx"
+   ```
+6. 拉到页面底部，点击 **Commit changes...**，保持默认选项，直接点绿色的 **Commit changes** 按钮保存
+
+这一步全程在网页上编辑 GitHub 文件完成，不需要下载任何东西。
+
+---
+
+## 第 5 步：在 Cloudflare 创建 Worker 并连接你的 GitHub 仓库
+
+1. 回到 Cloudflare Dashboard，左侧菜单点 **计算 (Workers) → Workers 和 Pages**
+2. 点击 **创建 (Create)**
+3. 选择 **连接到 Git (Connect to Git)**，不要选"克隆存储库 URL"或模板
+4. 如果还没授权 GitHub，会跳转到 GitHub 走一次授权流程：
+   - 选择 **Only select repositories**
+   - 勾选你刚 fork 出来的仓库（`你的用户名/tg`）
+   - 点击 **Install & Authorize**
+5. 授权完成后回到 Cloudflare，从列表里选中你 fork 的仓库，点击 **继续 (Continue)**
+6. 进入构建配置页面，确认这两项（通常会自动识别，不用改）：
+   - 构建命令：留空或 `npm install`
+   - 部署命令：`npx wrangler deploy`
+7. **暂时不要点部署**，先点击下方的 **变量和机密 (Variables and Secrets)**，添加两个 Secret：
+   - 名称 `BOT_TOKEN`，值填第 1 步拿到的 Token
+   - 名称 `TELEGRAM_WEBHOOK_SECRET`，值随便填一段随机字符串（比如 `myBot2026SecretKey888`），自己记住，下面还要用一次
+8. 确认无误后点击 **保存并部署 (Save and Deploy)**
+
+Cloudflare 会自动拉取你 fork 的仓库代码，读取 `wrangler.jsonc` 里的配置（包括你在第 4 步填的真实 KV id），完成构建和发布。
+
+---
+
+## 第 6 步：确认部署成功
+
+部署完成后，页面会显示一个 Worker 网址，类似：
 
 ```
 https://tg-cf-ai-bot.你的子域名.workers.dev
 ```
 
-**把这个网址完整复制下来**，下一步要用。
+点开这个网址，如果看到类似这样的一段文字（JSON 格式），说明部署成功：
 
-### 最后一步：注册 Webhook
+```json
+{"ok":true,"service":"tg-cf-ai-bot"}
+```
 
-一键部署会把代码跑起来，但还需要告诉 Telegram「有新消息时把消息推给这个网址」，这一步没办法在部署页面自动完成，需要手动发一次请求。
+如果看到 **Error 1101**，说明有绑定没配置对，回去检查：
+- KV 绑定是不是真实 ID（不是 `auto-provisioned-on-deploy`）
+- `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET` 是否已经在"变量和机密"里保存
+- Workers AI 绑定：进入 Worker 详情页 → **绑定** 标签，检查有没有一个类型是 **Workers AI**、绑定名叫 `AI` 的项，如果没有点 **添加绑定** 手动加一个
 
-浏览器无法直接发送这种请求，最简单的办法是用手机或电脑上的一个在线工具，或者用电脑终端跑一条命令：
+**把这个网址完整复制下来**，下一步注册 webhook 要用。
+
+---
+
+## 第 7 步：注册 Telegram Webhook
+
+这一步是告诉 Telegram "有新消息时，把消息推送到我的 Worker 地址"。
+
+**方法一：用手机浏览器打开在线请求工具**（推荐，不需要电脑）
+
+1. 打开 [reqbin.com](https://reqbin.com)
+2. 请求方法选 **POST**
+3. URL 填：
+   ```
+   https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook
+   ```
+4. Content 类型选 **JSON**，Body 填：
+   ```json
+   {
+     "url": "https://<你的Worker网址>/telegram/webhook",
+     "secret_token": "<你在第5步填的TELEGRAM_WEBHOOK_SECRET>"
+   }
+   ```
+5. 点击 **Send**，看到返回 `{"ok":true,"result":true,"description":"Webhook was set"}` 就说明成功
+
+**方法二：如果你有电脑，用命令行**
 
 ```bash
 curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://<你的Worker网址>/telegram/webhook",
-    "secret_token": "<你刚才填的TELEGRAM_WEBHOOK_SECRET>"
+    "secret_token": "<你的TELEGRAM_WEBHOOK_SECRET>"
   }'
 ```
-
-举个例子（假设 token 是 `123456789:AAExxxx`，Worker 网址是 `tg-cf-ai-bot.zsfan.workers.dev`，密钥是 `myBot2026SecretKey888`）：
-
-```bash
-curl -X POST "https://api.telegram.org/bot123456789:AAExxxx/setWebhook" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://tg-cf-ai-bot.zsfan.workers.dev/telegram/webhook",
-    "secret_token": "myBot2026SecretKey888"
-  }'
-```
-
-**没有电脑终端也能做**：把上面这条 curl 命令换成任意在线 HTTP 请求工具（比如手机浏览器打开 [reqbin.com](https://reqbin.com)），方法选 POST，URL 填 `https://api.telegram.org/bot你的token/setWebhook`，Body 填 JSON：
-
-```json
-{
-  "url": "https://你的Worker网址/telegram/webhook",
-  "secret_token": "你的密钥"
-}
-```
-
-点击发送，看到返回 `{"ok":true,"result":true,"description":"Webhook was set"}` 就说明成功了。
-
-### 测试
-
-打开 Telegram，搜索你创建的机器人 username，发送 `/start`，看到欢迎消息就说明全部配置成功。
 
 ---
 
-## 方式二：本地命令行部署（适合想改代码、做二次开发的人）
+## 第 8 步：测试机器人
 
-如果你想在本地跑代码、调试、自己改功能，用这种方式。
+打开 Telegram，搜索你在第 1 步创建的机器人 username，点击进入对话，发送 `/start`。
 
-### 准备
+看到欢迎消息和按钮菜单，说明全部部署成功。直接发一句话测试 AI 聊天，应该能看到打字机效果的流式回复。
 
-- Cloudflare 账号
-- Telegram Bot Token（同上）
-- 本地安装 Node.js 18+
+---
 
-### 第 1 步：获取代码
+## 以后怎么更新代码
 
-```bash
-git clone https://github.com/ZSFan888/tg.git
-cd tg
-```
+因为用的是 Connect to Git 方式，以后你 fork 的仓库如果有新代码（比如同步了原仓库的更新），或者你自己改了代码并 push，Cloudflare 会**自动重新部署**，不需要手动操作。
 
-### 第 2 步：安装依赖
-
-```bash
-npm install
-```
-
-### 第 3 步：登录 Cloudflare
-
-```bash
-npx wrangler login
-```
-
-### 第 4 步：创建 KV 数据库
-
-```bash
-npx wrangler kv namespace create BOT_KV
-```
-
-执行后会输出一段 JSON，把里面的 `id` 值复制下来，填进 `wrangler.jsonc` 的：
-
-```jsonc
-"kv_namespaces": [
-  {
-    "binding": "BOT_KV",
-    "id": "auto-provisioned-on-deploy"
-  }
-],
-```
-
-把 `"auto-provisioned-on-deploy"` 替换成真实 id。
-
-### 第 5 步：生成 Webhook 密钥
-
-```bash
-node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
-```
-
-复制输出的字符串，保存好。
-
-### 第 6 步：配置生产环境密钥
-
-```bash
-npx wrangler secret put BOT_TOKEN
-```
-
-粘贴 Bot Token，回车。
-
-```bash
-npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
-```
-
-粘贴第 5 步生成的密钥，回车。
-
-### 第 7 步（可选）：本地开发测试
-
-```bash
-cp .dev.vars.example .dev.vars
-```
-
-编辑 `.dev.vars`，填入 `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET`，然后运行：
-
-```bash
-npm run dev
-```
-
-### 第 8 步：部署
-
-```bash
-npm run deploy
-```
-
-部署成功后会输出 Worker 网址，复制下来。
-
-### 第 9 步：注册 Webhook
-
-参考「方式一」的「最后一步：注册 Webhook」部分，用你的 Bot Token、Worker 网址和密钥替换对应内容。
-
-### 后续更新代码
-
-```bash
-git pull
-npm install
-npm run deploy
-```
+如果原仓库（`ZSFan888/tg`）后续有更新，想同步到你自己 fork 的仓库，在你 fork 的仓库页面点击 **Sync fork → Update branch** 即可，同步后 Cloudflare 会自动触发新的部署。
 
 ---
 
@@ -238,37 +200,42 @@ npm run deploy
 
 ## 可选：配置白名单和其他参数
 
-部署完成后，可以在 Cloudflare Dashboard 里找到你的 Worker → Settings → Variables，或者直接改本地 `wrangler.jsonc` 的 `vars` 部分：
+部署完成后，去 Worker 详情页 → **设置 → 变量和机密**，可以调整这些非密钥变量（点右边的铅笔图标编辑）：
 
-- `ALLOWED_USER_IDS`：只想让特定人用？填入 Telegram 用户 id，多个用逗号分隔（例如 `"123456789,987654321"`），留空则任何人都能私聊使用。查自己的用户 id 可以找 Telegram 里的 `@userinfobot`。
-- `MAX_HISTORY`：机器人记住最近几轮对话，默认 8。
-- `RATE_LIMIT_PER_MINUTE`：每个用户每分钟最多能请求几次 AI，默认 12。
+- `ALLOWED_USER_IDS`：只想让特定人用？填入 Telegram 用户 id，多个用英文逗号分隔，例如 `123456789,987654321`；填 `all` 表示任何人都能用（默认值）。查自己的用户 id 可以找 Telegram 里的 `@userinfobot`。
+- `MAX_HISTORY`：机器人记住最近几轮对话，默认 `8`。
+- `RATE_LIMIT_PER_MINUTE`：每个用户每分钟最多能请求几次 AI，默认 `12`。
 
-改完之后如果是一键部署的项目，去 Cloudflare Dashboard 里改完 Variables 点 Deploy 即可生效；如果是本地部署，改完 `wrangler.jsonc` 后重新 `npm run deploy`。
+改完保存后需要触发一次新部署才会生效（可以在仓库里随便改一个字符再提交一次 commit，Cloudflare 会自动重新构建）。
 
 ---
 
 ## 常见问题排查
 
-**机器人没有任何回复**
+**Worker 打开显示 Error 1101（Worker threw exception）**
 
-- 检查 webhook 是否注册成功：访问 `https://api.telegram.org/bot<你的token>/getWebhookInfo`，看 `last_error_message` 字段有没有报错
-- 确认 Cloudflare Dashboard 里 Worker 的 Secrets 已经正确设置了 `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET`
-- 确认 KV 数据库已经正确绑定（Worker 详情页 → Settings → Bindings 能看到）
+几乎总是因为绑定没配对，逐个检查：
+- KV 绑定的 ID 是不是还是占位符 `auto-provisioned-on-deploy`（回第 4 步重新填真实 ID）
+- `BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET` 是否已经在"变量和机密"里正确保存为 Secret 类型
+- Workers AI 绑定（名叫 `AI`）是否存在
 
-**一键部署页面报错或卡住**
+**机器人在 Telegram 里没有任何回复**
 
-- 确认你点击部署按钮时用的是自己的 GitHub 账号，且这个仓库是 public
-- 如果提示 GitHub 授权失败，去 [github.com/settings/applications](https://github.com/settings/applications) 检查是否有 Cloudflare 相关的授权，重新授权一次
+- 访问 `https://api.telegram.org/bot<你的token>/getWebhookInfo`，看 `last_error_message` 字段有没有报错信息
+- 确认 webhook 的 url 填的是 `.../telegram/webhook`（结尾别漏了这段路径）
+- 确认 `secret_token` 和 Cloudflare 里配置的 `TELEGRAM_WEBHOOK_SECRET` 完全一致
+
+**"提取 GitHub 用户或组织详细信息时出错"**
+
+这是 Cloudflare 读取 GitHub 授权信息时的提示，通常不影响实际部署结果，可以先忽略，等部署完成看 Worker 网址是否正常访问再判断。如果部署确实失败，去 [github.com/settings/installations](https://github.com/settings/installations) 找到 Cloudflare Workers and Pages，重新确认一下仓库访问权限。
 
 **收到"抱歉，你没有使用这个机器人的权限"**
 
-- 说明配置了 `ALLOWED_USER_IDS` 白名单，但你的用户 id 不在列表里，去 `@userinfobot` 查一下自己的 id 再加进去
+- 说明 `ALLOWED_USER_IDS` 配置了白名单但你的用户 id 不在里面，去 `@userinfobot` 查一下自己的 id 再加进去，或者直接改成 `all`
 
 **AI 回复很慢或经常报错**
 
 - 免费的 Workers AI 有每日额度限制（10000 Neurons/天），额度用尽后请求会失败，可以用 `/usage` 观察消耗速度
-- 可以在 Cloudflare Dashboard 的 Workers AI 页面查看详细用量
 
 ---
 
