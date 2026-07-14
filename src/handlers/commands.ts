@@ -10,7 +10,7 @@ import { MODELS, getModelById } from '../config/models';
 import { registerKnownUser } from '../storage/users-store';
 import { isAdmin } from '../utils/access';
 import { getAllKnownUsers } from '../storage/users-store';
-import { getGlobalStats, getStatsHistory } from '../storage/usage-store';
+import { getGlobalStats, getStatsHistory, getModelStats } from '../storage/usage-store';
 import { banUser, unbanUser } from '../storage/ban-store';
 import { buildUsageChartUrl } from '../services/chart';
 
@@ -169,15 +169,22 @@ export function registerCommands(bot: Bot<BotContext>) {
       return;
     }
 
-    const [users, global, history] = await Promise.all([
+    const [users, global, history, modelStats] = await Promise.all([
       getAllKnownUsers(ctx.env),
       getGlobalStats(ctx.env),
-      getStatsHistory(ctx.env)
+      getStatsHistory(ctx.env),
+      getModelStats(ctx.env)
     ]);
 
     const now = Date.now();
     const activeToday = users.filter((u) => now - u.lastSeenAt < 24 * 60 * 60 * 1000).length;
     const activeWeek = users.filter((u) => now - u.lastSeenAt < 7 * 24 * 60 * 60 * 1000).length;
+
+    const modelLines = MODELS
+      .map((m) => ({ label: m.label, count: modelStats[m.id] ?? 0 }))
+      .filter((m) => m.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .map((m) => `  ${m.label}：${m.count} 次`);
 
     const summary = [
       '» 全局使用统计',
@@ -185,7 +192,10 @@ export function registerCommands(bot: Bot<BotContext>) {
       `累计用户数：${users.length}`,
       `今日活跃用户：${activeToday}`,
       `近 7 天活跃用户：${activeWeek}`,
-      `今日消息总数：${global.messageCount}`
+      `今日消息总数：${global.messageCount}`,
+      '',
+      '按模型调用次数（累计）：',
+      ...(modelLines.length > 0 ? modelLines : ['  暂无调用记录'])
     ].join('\n');
 
     if (history.length < 2) {

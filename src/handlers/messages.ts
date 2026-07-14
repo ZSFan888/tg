@@ -8,7 +8,7 @@ import { checkRateLimit } from '../storage/rate-limit';
 import { getUserPreferences } from '../storage/preferences-store';
 import { getPendingAction, clearPendingAction } from '../storage/pending-store';
 import { setCustomPrompt } from '../storage/preferences-store';
-import { incrementUsage, incrementGlobalStats } from '../storage/usage-store';
+import { incrementUsage, incrementGlobalStats, incrementModelUsage } from '../storage/usage-store';
 import { registerKnownUser } from '../storage/users-store';
 import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
@@ -105,7 +105,10 @@ export async function runAiTurn(
     }
   }, modelId);
 
-  const keyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
+  const keyboard = new InlineKeyboard()
+    .text('› 重新生成', 'regen:last')
+    .row()
+    .text('· 追问生成中…', 'noop');
   try {
     await ctx.api.editMessageReplyMarkup(chatId, placeholder.message_id, {
       reply_markup: keyboard
@@ -122,13 +125,21 @@ export async function runAiTurn(
 
   await incrementUsage(ctx.env, userId);
   await incrementGlobalStats(ctx.env);
+  await incrementModelUsage(ctx.env, modelId);
 
   generateFollowUps(ctx.env, text, finalText, modelId)
     .then(async (questions) => {
-      if (questions.length === 0) return;
+      const followKeyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
+
+      if (questions.length === 0) {
+        await ctx.api.editMessageReplyMarkup(chatId, placeholder.message_id, {
+          reply_markup: followKeyboard
+        }).catch(() => {});
+        return;
+      }
+
       await saveFollowUps(ctx.env, chatId, placeholder.message_id, questions);
 
-      const followKeyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
       questions.forEach((q, i) => {
         followKeyboard.row().text(q, `followup:${placeholder.message_id}:${i}`);
       });
@@ -137,7 +148,12 @@ export async function runAiTurn(
         reply_markup: followKeyboard
       }).catch(() => {});
     })
-    .catch(() => {});
+    .catch(async () => {
+      const fallbackKeyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
+      await ctx.api.editMessageReplyMarkup(chatId, placeholder.message_id, {
+        reply_markup: fallbackKeyboard
+      }).catch(() => {});
+    });
 }
 
 export function registerMessages(bot: Bot<BotContext>) {

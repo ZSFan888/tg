@@ -120,6 +120,10 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     );
   });
 
+  bot.callbackQuery('noop', async (ctx) => {
+    await ctx.answerCallbackQuery({ text: '追问生成中，请稍候…' });
+  });
+
   bot.callbackQuery(/^followup:(\d+):(\d+)$/, async (ctx) => {
     if (!ctx.from || !ctx.chat) return;
     const messageId = Number(ctx.match?.[1]);

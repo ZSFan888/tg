@@ -87,3 +87,21 @@ export async function getStatsHistory(env: Env): Promise<Array<{ date: string; m
   const raw = await env.BOT_KV.get(HISTORY_KEY, 'json');
   return (raw as Array<{ date: string; messageCount: number }> | null) ?? [];
 }
+
+const MODEL_STATS_KEY = 'stats:models';
+
+export async function incrementModelUsage(env: Env, modelId: string) {
+  const raw = await env.BOT_KV.get(MODEL_STATS_KEY, 'json');
+  const stats = (raw as Record<string, number> | null) ?? {};
+
+  stats[modelId] = (stats[modelId] ?? 0) + 1;
+
+  await env.BOT_KV.put(MODEL_STATS_KEY, JSON.stringify(stats), {
+    expirationTtl: 60 * 60 * 24 * 90
+  });
+}
+
+export async function getModelStats(env: Env): Promise<Record<string, number>> {
+  const raw = await env.BOT_KV.get(MODEL_STATS_KEY, 'json');
+  return (raw as Record<string, number> | null) ?? {};
+}
