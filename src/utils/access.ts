@@ -2,6 +2,8 @@ import type { Env } from '../types/env';
 
 export function parseCsvNumbers(input?: string): number[] {
   if (!input?.trim()) return [];
+  const normalized = input.trim().toLowerCase();
+  if (normalized === 'all' || normalized === 'any' || normalized === '*') return [];
   return input
     .split(',')
     .map((item) => Number(item.trim()))

@@ -15,7 +15,7 @@
   },
   "vars": {
     "BOT_WEBHOOK_PATH": "/telegram/webhook",
-    "ALLOWED_USER_IDS": "",
+    "ALLOWED_USER_IDS": "all",
     "AI_MODEL": "@cf/meta/llama-3.2-1b-instruct",
     "SYSTEM_PROMPT": "你是一个简洁、友好的 Telegram 私聊助手。优先用中文回答，回答要直接，不要废话。",
     "MAX_HISTORY": "8",
