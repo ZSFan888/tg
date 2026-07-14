@@ -2,6 +2,7 @@ import { InlineKeyboard } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import { generateReplyStream } from '../services/ai';
+import { generateFollowUps } from '../services/followups';
 import { getChatHistory, saveChatHistory } from '../storage/chat-store';
 import { checkRateLimit } from '../storage/rate-limit';
 import { getUserPreferences } from '../storage/preferences-store';
@@ -9,6 +10,8 @@ import { getPendingAction, clearPendingAction } from '../storage/pending-store';
 import { setCustomPrompt } from '../storage/preferences-store';
 import { incrementUsage, incrementGlobalStats } from '../storage/usage-store';
 import { registerKnownUser } from '../storage/users-store';
+import { saveFollowUps } from '../storage/followup-store';
+import { getBanRecord } from '../storage/ban-store';
 import { resolveSystemPrompt } from '../config/personas';
 import { isUserAllowed } from '../utils/access';
 import { searchWeb, buildSearchContext } from '../services/search';
@@ -20,6 +23,7 @@ const TYPING_CURSOR = ' ▌';
 interface RunAiTurnOptions {
   historyOverride?: ChatMessage[];
   isRegenerate?: boolean;
+  editedNotice?: boolean;
 }
 
 export async function runAiTurn(
@@ -43,9 +47,13 @@ export async function runAiTurn(
   const history = options.historyOverride ?? (await getChatHistory(ctx.env, chatId));
   const modelId = prefs.modelId ?? ctx.env.AI_MODEL;
 
+  const placeholderText = options.editedNotice
+    ? '· 检测到消息已编辑，重新生成回答…'
+    : (prefs.webSearchEnabled && ctx.env.TAVILY_API_KEY ? '· 正在联网搜索…' : '思考中…');
+
   const placeholder = await ctx.api.sendMessage(
     chatId,
-    prefs.webSearchEnabled && ctx.env.TAVILY_API_KEY ? '· 正在联网搜索…' : '思考中…',
+    placeholderText,
     replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined
   );
 
@@ -114,15 +122,44 @@ export async function runAiTurn(
 
   await incrementUsage(ctx.env, userId);
   await incrementGlobalStats(ctx.env);
+
+  generateFollowUps(ctx.env, text, finalText, modelId)
+    .then(async (questions) => {
+      if (questions.length === 0) return;
+      await saveFollowUps(ctx.env, chatId, placeholder.message_id, questions);
+
+      const followKeyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
+      questions.forEach((q, i) => {
+        followKeyboard.row().text(q, `followup:${placeholder.message_id}:${i}`);
+      });
+
+      await ctx.api.editMessageReplyMarkup(chatId, placeholder.message_id, {
+        reply_markup: followKeyboard
+      }).catch(() => {});
+    })
+    .catch(() => {});
 }
 
 export function registerMessages(bot: Bot<BotContext>) {
-  bot.on('message:text', async (ctx) => {
-    const text = ctx.message.text.trim();
+  bot.on(['message:text', 'edited_message:text'], async (ctx) => {
+    const rawText = ctx.message?.text ?? ctx.editedMessage?.text ?? '';
+    const text = rawText.trim();
+    const isEdited = !ctx.message && !!ctx.editedMessage;
     if (!text || text.startsWith('/')) return;
     if (!ctx.from) return;
+    if (!ctx.chat) return;
+
     if (!isUserAllowed(ctx.env, ctx.from.id)) {
-      await ctx.reply('抱歉，你没有使用这个机器人的权限。');
+      if (!isEdited) await ctx.reply('抱歉，你没有使用这个机器人的权限。');
+      return;
+    }
+
+    const ban = await getBanRecord(ctx.env, ctx.from.id);
+    if (ban) {
+      if (!isEdited) {
+        const until = ban.until ? new Date(ban.until).toLocaleString('zh-CN') : '永久';
+        await ctx.reply(`你已被限制使用这个机器人。\n解除时间：${until}${ban.reason ? `\n原因：${ban.reason}` : ''}`);
+      }
       return;
     }
 
@@ -134,14 +171,17 @@ export function registerMessages(bot: Bot<BotContext>) {
       ctx.from.first_name
     );
 
-    const pending = await getPendingAction(ctx.env, ctx.from.id);
-    if (pending?.action === 'awaiting_custom_prompt') {
-      await clearPendingAction(ctx.env, ctx.from.id);
-      await setCustomPrompt(ctx.env, ctx.from.id, text);
-      await ctx.reply('自定义提示词已保存，现在开始生效。使用 /settings 可以随时切回预设风格。');
-      return;
+    if (!isEdited) {
+      const pending = await getPendingAction(ctx.env, ctx.from.id);
+      if (pending?.action === 'awaiting_custom_prompt') {
+        await clearPendingAction(ctx.env, ctx.from.id);
+        await setCustomPrompt(ctx.env, ctx.from.id, text);
+        await ctx.reply('自定义提示词已保存，现在开始生效。使用 /settings 可以随时切回预设风格。');
+        return;
+      }
     }
 
-    await runAiTurn(ctx, ctx.chat.id, ctx.from.id, text, ctx.msg.message_id);
+    const messageId = ctx.message?.message_id ?? ctx.editedMessage?.message_id;
+    await runAiTurn(ctx, ctx.chat.id, ctx.from.id, text, messageId, { editedNotice: isEdited });
   });
 }

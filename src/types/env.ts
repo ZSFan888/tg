@@ -59,6 +59,18 @@ export interface GlobalDailyStats {
   messageCount: number;
 }
 
+export interface DailyStatPoint {
+  date: string;
+  messageCount: number;
+}
+
+export interface BanRecord {
+  userId: number;
+  bannedAt: number;
+  until?: number;
+  reason?: string;
+}
+
 export type PendingAction = 'awaiting_custom_prompt';
 
 export interface PendingState {

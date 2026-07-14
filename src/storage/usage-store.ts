@@ -34,6 +34,8 @@ export async function getUsage(env: Env, userId: number | string): Promise<Usage
 }
 
 const GLOBAL_KEY = 'stats:global';
+const HISTORY_KEY = 'stats:history';
+const HISTORY_DAYS = 14;
 
 export async function incrementGlobalStats(env: Env) {
   const today = todayKey();
@@ -46,6 +48,7 @@ export async function incrementGlobalStats(env: Env) {
       : { date: today, messageCount: 1 };
 
   await env.BOT_KV.put(GLOBAL_KEY, JSON.stringify(next), { expirationTtl: 60 * 60 * 24 * 2 });
+  await bumpHistory(env, today);
   return next;
 }
 
@@ -58,4 +61,29 @@ export async function getGlobalStats(env: Env) {
     return { date: today, messageCount: 0 };
   }
   return state;
+}
+
+async function bumpHistory(env: Env, today: string) {
+  const raw = await env.BOT_KV.get(HISTORY_KEY, 'json');
+  const history = (raw as Array<{ date: string; messageCount: number }> | null) ?? [];
+
+  const idx = history.findIndex((h) => h.date === today);
+  if (idx >= 0) {
+    history[idx].messageCount += 1;
+  } else {
+    history.push({ date: today, messageCount: 1 });
+  }
+
+  const trimmed = history
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-HISTORY_DAYS);
+
+  await env.BOT_KV.put(HISTORY_KEY, JSON.stringify(trimmed), {
+    expirationTtl: 60 * 60 * 24 * (HISTORY_DAYS + 5)
+  });
+}
+
+export async function getStatsHistory(env: Env): Promise<Array<{ date: string; messageCount: number }>> {
+  const raw = await env.BOT_KV.get(HISTORY_KEY, 'json');
+  return (raw as Array<{ date: string; messageCount: number }> | null) ?? [];
 }

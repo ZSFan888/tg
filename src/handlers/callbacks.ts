@@ -8,6 +8,7 @@ import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
 import { getModelByKey } from '../config/models';
+import { getFollowUps } from '../storage/followup-store';
 import { runAiTurn } from './messages';
 
 export function registerCallbacks(bot: Bot<BotContext>) {
@@ -117,5 +118,22 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       undefined,
       { historyOverride: historyWithoutLastTurn, isRegenerate: true }
     );
+  });
+
+  bot.callbackQuery(/^followup:(\d+):(\d+)$/, async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
+    const messageId = Number(ctx.match?.[1]);
+    const index = Number(ctx.match?.[2]);
+
+    const questions = await getFollowUps(ctx.env, ctx.chat.id, messageId);
+    const question = questions[index];
+
+    if (!question) {
+      await ctx.answerCallbackQuery({ text: '这个追问已经失效了' });
+      return;
+    }
+
+    await ctx.answerCallbackQuery();
+    await runAiTurn(ctx, ctx.chat.id, ctx.from.id, question, undefined);
   });
 }

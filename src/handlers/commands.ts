@@ -10,7 +10,9 @@ import { MODELS, getModelById } from '../config/models';
 import { registerKnownUser } from '../storage/users-store';
 import { isAdmin } from '../utils/access';
 import { getAllKnownUsers } from '../storage/users-store';
-import { getGlobalStats } from '../storage/usage-store';
+import { getGlobalStats, getStatsHistory } from '../storage/usage-store';
+import { banUser, unbanUser } from '../storage/ban-store';
+import { buildUsageChartUrl } from '../services/chart';
 
 export function registerCommands(bot: Bot<BotContext>) {
   bot.command('start', async (ctx) => {
@@ -53,7 +55,7 @@ export function registerCommands(bot: Bot<BotContext>) {
     ];
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
-      lines.push('', '管理员专用：', '/stats - 查看全局使用统计', '/broadcast <内容> - 群发通知给所有已知用户');
+      lines.push('', '管理员专用：', '/stats - 查看全局使用统计（含趋势图）', '/broadcast <内容> - 群发通知给所有已知用户', '/ban <用户ID> [分钟数] [原因] - 禁用用户', '/unban <用户ID> - 解除禁用');
     }
 
     await ctx.reply(lines.join('\n'));
@@ -167,23 +169,77 @@ export function registerCommands(bot: Bot<BotContext>) {
       return;
     }
 
-    const [users, global] = await Promise.all([
+    const [users, global, history] = await Promise.all([
       getAllKnownUsers(ctx.env),
-      getGlobalStats(ctx.env)
+      getGlobalStats(ctx.env),
+      getStatsHistory(ctx.env)
     ]);
 
     const now = Date.now();
     const activeToday = users.filter((u) => now - u.lastSeenAt < 24 * 60 * 60 * 1000).length;
     const activeWeek = users.filter((u) => now - u.lastSeenAt < 7 * 24 * 60 * 60 * 1000).length;
 
-    await ctx.reply([
+    const summary = [
       '» 全局使用统计',
       '',
       `累计用户数：${users.length}`,
       `今日活跃用户：${activeToday}`,
       `近 7 天活跃用户：${activeWeek}`,
       `今日消息总数：${global.messageCount}`
-    ].join('\n'));
+    ].join('\n');
+
+    if (history.length < 2) {
+      await ctx.reply(summary);
+      return;
+    }
+
+    try {
+      const chartUrl = buildUsageChartUrl(history);
+      await ctx.replyWithPhoto(chartUrl, { caption: summary });
+    } catch (err) {
+      console.error('Failed to render usage chart:', err);
+      await ctx.reply(summary);
+    }
+  });
+
+  bot.command('ban', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.reply('这个命令仅管理员可用。');
+      return;
+    }
+
+    const args = ctx.match?.trim().split(/\s+/) ?? [];
+    const targetId = Number(args[0]);
+    const minutes = args[1] ? Number(args[1]) : undefined;
+    const reason = args.slice(2).join(' ') || undefined;
+
+    if (!targetId || Number.isNaN(targetId)) {
+      await ctx.reply('用法：/ban <用户ID> [分钟数] [原因]\n例如：/ban 123456789 60 刷屏\n不填分钟数则永久禁用。用户 ID 可以在 /stats 或转发消息里获取。');
+      return;
+    }
+
+    await banUser(ctx.env, targetId, minutes, reason);
+    await ctx.reply(
+      minutes
+        ? `已禁用用户 ${targetId}，时长 ${minutes} 分钟。`
+        : `已永久禁用用户 ${targetId}。`
+    );
+  });
+
+  bot.command('unban', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.reply('这个命令仅管理员可用。');
+      return;
+    }
+
+    const targetId = Number(ctx.match?.trim());
+    if (!targetId || Number.isNaN(targetId)) {
+      await ctx.reply('用法：/unban <用户ID>');
+      return;
+    }
+
+    await unbanUser(ctx.env, targetId);
+    await ctx.reply(`已解除用户 ${targetId} 的禁用。`);
   });
 
   bot.command('broadcast', async (ctx) => {
