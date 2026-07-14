@@ -3,7 +3,7 @@ import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import type { PersonaKey } from '../types/env';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences, setUserPersona, setUserModel } from '../storage/preferences-store';
+import { getUserPreferences, setUserPersona, setUserModel, setWebSearchEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
@@ -87,6 +87,26 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
     await ctx.answerCallbackQuery({ text: `已切换到${model.label}` });
     await ctx.editMessageText(`模型已切换为：${model.label}\n${model.note}`);
+  });
+
+  bot.callbackQuery(/^websearch:(on|off)$/, async (ctx) => {
+    if (!ctx.from) return;
+    const nextState = ctx.match?.[1] === 'on';
+
+    await setWebSearchEnabled(ctx.env, ctx.from.id, nextState);
+
+    if (nextState && !ctx.env.TAVILY_API_KEY) {
+      await ctx.answerCallbackQuery({ text: '管理员还没配置搜索密钥' });
+      await ctx.editMessageText('联网搜索：已开启\n但管理员还没有配置搜索服务的密钥，暂时无法生效。');
+      return;
+    }
+
+    await ctx.answerCallbackQuery({ text: nextState ? '联网搜索已开启' : '联网搜索已关闭' });
+    await ctx.editMessageText(
+      nextState
+        ? '联网搜索：已开启\n之后每次提问，我会先搜索最新信息再回答。'
+        : '联网搜索：已关闭\n回到只用模型自身知识回答。'
+    );
   });
 
   bot.callbackQuery('regen:last', async (ctx) => {

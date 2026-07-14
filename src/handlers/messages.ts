@@ -12,6 +12,7 @@ import { incrementUsage, incrementGlobalStats, incrementModelUsage } from '../st
 import { registerKnownUser } from '../storage/users-store';
 import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
+import { sanitizeMarkdown } from '../utils/markdown';
 import { resolveSystemPrompt } from '../config/personas';
 import { searchWeb, buildSearchContext } from '../services/search';
 import type { ChatMessage } from '../types/env';
@@ -100,18 +101,21 @@ export async function runAiTurn(
 
   const finalText = await generateReplyStream(ctx.env, history, text, prompt, {
     onChunk: async (fullTextSoFar) => {
-      const display = fullTextSoFar.length > 3800
-        ? `${fullTextSoFar.slice(0, 3800)}…`
-        : fullTextSoFar;
+      const clean = sanitizeMarkdown(fullTextSoFar);
+      const display = clean.length > 3800
+        ? `${clean.slice(0, 3800)}…`
+        : clean;
       await flushEdit(display + TYPING_CURSOR);
     },
     onDone: async (full) => {
-      await flushEdit(full, true);
+      await flushEdit(sanitizeMarkdown(full), true);
     },
     onError: async () => {
       await flushEdit('抱歉，AI 服务暂时出了点问题，请稍后再试。', true);
     }
   }, modelId);
+
+  const cleanFinalText = sanitizeMarkdown(finalText);
 
   typingActive = false;
   clearInterval(typingInterval);
@@ -132,7 +136,7 @@ export async function runAiTurn(
     saveChatHistory(ctx.env, chatId, [
       ...history,
       { role: 'user', content: text },
-      { role: 'assistant', content: finalText }
+      { role: 'assistant', content: cleanFinalText }
     ]),
     incrementUsage(ctx.env, userId),
     incrementGlobalStats(ctx.env),
@@ -140,7 +144,7 @@ export async function runAiTurn(
   ]);
 
   ctx.waitUntil(
-    generateFollowUps(ctx.env, text, finalText, modelId)
+    generateFollowUps(ctx.env, text, cleanFinalText, modelId)
     .then(async (questions) => {
       const followKeyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
 
