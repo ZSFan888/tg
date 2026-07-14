@@ -7,7 +7,7 @@ import { registerAdminRoutes } from './admin/routes';
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get('/', (c) => c.json({ ok: true, service: 'tg-cf-ai-bot' }));
+// '/' 由 public/index.html 静态提供可视化状态页，此处仅保留健康检查 API
 app.get('/healthz', (c) => c.json({ ok: true, now: Date.now() }));
 
 app.post('/telegram/webhook', async (c) => {

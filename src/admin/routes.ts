@@ -24,6 +24,81 @@ async function requireAuth(env: Env, token: string | undefined): Promise<boolean
 }
 
 export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
+
+  app.get('/api/public-status', async (c) => {
+    const env = await resolveEnv(c.env);
+
+    let webhookOk = false;
+    let webhookUrl: string | undefined;
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/getWebhookInfo`);
+      const data = (await res.json()) as { ok: boolean; result?: { url?: string } };
+      webhookOk = Boolean(data.ok && data.result?.url);
+      webhookUrl = data.result?.url;
+    } catch {
+      webhookOk = false;
+    }
+
+    const checks = [
+      {
+        key: 'bot_token',
+        label: 'Telegram Bot Token',
+        ok: Boolean(env.BOT_TOKEN),
+        detail: env.BOT_TOKEN ? '已配置' : '未配置，机器人无法启动'
+      },
+      {
+        key: 'webhook_secret',
+        label: 'Webhook 密钥',
+        ok: Boolean(env.TELEGRAM_WEBHOOK_SECRET),
+        detail: env.TELEGRAM_WEBHOOK_SECRET ? '已配置' : '未配置，Webhook 无法验证请求'
+      },
+      {
+        key: 'webhook_connected',
+        label: 'Webhook 连接',
+        ok: webhookOk,
+        detail: webhookOk ? '已连接到 Telegram' : '尚未注册或连接失败'
+      },
+      {
+        key: 'admin_ids',
+        label: '管理员用户 ID',
+        ok: Boolean(env.ADMIN_USER_IDS),
+        detail: env.ADMIN_USER_IDS ? '已配置' : '未配置，管理员命令不可用'
+      },
+      {
+        key: 'ai_model',
+        label: 'AI 模型',
+        ok: Boolean(env.AI_MODEL),
+        detail: env.AI_MODEL || '未配置'
+      },
+      {
+        key: 'web_search',
+        label: '联网搜索（可选）',
+        ok: Boolean(env.TAVILY_API_KEY),
+        detail: env.TAVILY_API_KEY ? '已配置' : '未配置（可选功能，不影响基础使用）',
+        optional: true
+      },
+      {
+        key: 'group_mention',
+        label: '群聊@限制（可选）',
+        ok: true,
+        detail: env.GROUP_MENTION_REQUIRED === 'true' ? '已开启，群聊需要@才回复' : '未开启，群聊全部消息都会回复',
+        optional: true
+      }
+    ];
+
+    const requiredChecks = checks.filter((item) => !item.optional);
+    const allRequiredOk = requiredChecks.every((item) => item.ok);
+    const adminInitialized = await hasAdminPassword(env);
+
+    return c.json({
+      ok: true,
+      now: Date.now(),
+      healthy: allRequiredOk,
+      checks,
+      adminInitialized
+    });
+  });
+
   app.get('/api/admin/auth/status', async (c) => {
     const initialized = await hasAdminPassword(c.env);
     const token = getCookie(c, SESSION_COOKIE);

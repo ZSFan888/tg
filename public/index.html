@@ -1,3 +1,165 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>tg-cf-ai-bot</title></head>
-<body>Worker is running. This route is handled by Cloudflare Pages Functions.</body></html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tg-cf-ai-bot 服务状态</title>
+<style>
+:root {
+  --bg: #0f1115;
+  --surface: #161922;
+  --surface-2: #1c202b;
+  --border: rgba(255,255,255,0.08);
+  --text: #e6e8ec;
+  --text-muted: #8a8f9c;
+  --primary: #4f98a3;
+  --primary-hover: #6bb0ba;
+  --success: #6daa45;
+  --error: #dd6974;
+  --warning: #e8af34;
+  --radius: 10px;
+  --radius-lg: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+.container { max-width: 720px; margin: 0 auto; padding: 48px 20px 60px; }
+
+.hero { text-align: center; margin-bottom: 36px; }
+.logo {
+  width: 56px; height: 56px; border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--primary), #2d6169);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 18px; font-size: 24px;
+}
+.hero h1 { font-size: 22px; margin-bottom: 8px; }
+.hero p { color: var(--text-muted); font-size: 14px; }
+
+.status-banner {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 14px 20px; border-radius: var(--radius-lg); margin-bottom: 28px;
+  font-size: 14px; font-weight: 600; border: 1px solid var(--border);
+}
+.status-banner.healthy { background: rgba(109,170,69,0.1); color: var(--success); border-color: rgba(109,170,69,0.25); }
+.status-banner.unhealthy { background: rgba(221,105,116,0.1); color: var(--error); border-color: rgba(221,105,116,0.25); }
+.status-banner .pulse {
+  width: 9px; height: 9px; border-radius: 50%; background: currentColor;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.check-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 32px; }
+.check-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 14px 16px;
+}
+.check-icon {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; margin-top: 1px;
+}
+.check-icon.ok { background: rgba(109,170,69,0.15); color: var(--success); }
+.check-icon.fail { background: rgba(221,105,116,0.15); color: var(--error); }
+.check-icon.optional-off { background: rgba(232,175,52,0.15); color: var(--warning); }
+.check-body .title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+.check-body .detail { font-size: 12px; color: var(--text-muted); }
+.check-body .tag { font-size: 10px; color: var(--text-muted); background: var(--surface-2); padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
+
+.actions { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--primary); color: #0f1115; border: none;
+  padding: 13px 28px; border-radius: var(--radius); font-size: 15px; font-weight: 600;
+  cursor: pointer; text-decoration: none; transition: background 0.15s ease;
+}
+.btn:hover { background: var(--primary-hover); }
+.btn.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.btn.secondary:hover { background: #262b38; }
+
+.footer-note { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 30px; }
+
+.skeleton { background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite; border-radius: var(--radius); height: 60px; }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="hero">
+    <div class="logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e6e8ec" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+    </div>
+    <h1>tg-cf-ai-bot</h1>
+    <p>Telegram AI 机器人 · Cloudflare Pages 部署</p>
+  </div>
+
+  <div id="status-banner-wrap"></div>
+  <div id="check-list-wrap"></div>
+
+  <div class="actions">
+    <a href="/admin.html" class="btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="M12 8v4l3 3"/></svg>
+      进入管理面板
+    </a>
+    <a href="https://t.me" target="_blank" rel="noopener noreferrer" class="btn secondary">前往 Telegram 使用机器人</a>
+  </div>
+
+  <p class="footer-note">状态每次刷新页面时自动检测 · 数据不含任何密钥明文</p>
+</div>
+
+<script>
+async function loadStatus() {
+  const bannerWrap = document.getElementById('status-banner-wrap');
+  const listWrap = document.getElementById('check-list-wrap');
+  bannerWrap.innerHTML = '<div class="skeleton" style="margin-bottom:28px"></div>';
+  listWrap.innerHTML = Array.from({ length: 5 }).map(() => '<div class="skeleton" style="margin-bottom:10px"></div>').join('');
+
+  try {
+    const res = await fetch('/api/public-status');
+    const data = await res.json();
+    if (!data.ok) throw new Error('bad response');
+
+    bannerWrap.innerHTML = `
+      <div class="status-banner ${data.healthy ? 'healthy' : 'unhealthy'}">
+        <span class="pulse"></span>
+        ${data.healthy ? '服务运行正常，所有必需配置已就绪' : '存在未完成的必需配置，机器人可能无法正常工作'}
+      </div>
+    `;
+
+    listWrap.innerHTML = `
+      <div class="check-list">
+        ${data.checks.map((item) => {
+          const iconClass = item.ok ? 'ok' : (item.optional ? 'optional-off' : 'fail');
+          const iconChar = item.ok ? '✓' : (item.optional ? '!' : '✕');
+          return `
+            <div class="check-item">
+              <div class="check-icon ${iconClass}">${iconChar}</div>
+              <div class="check-body">
+                <div class="title">${item.label}${item.optional ? '<span class="tag">可选</span>' : ''}</div>
+                <div class="detail">${item.detail}</div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  } catch {
+    bannerWrap.innerHTML = '<div class="status-banner unhealthy"><span class="pulse"></span>状态检测失败，请检查服务是否正常部署</div>';
+    listWrap.innerHTML = '';
+  }
+}
+
+loadStatus();
+</script>
+</body>
+</html>
