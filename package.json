@@ -1,6 +1,6 @@
 {
   "name": "tg-cf-ai-bot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,5 +17,15 @@
     "@cloudflare/workers-types": "^4.20260712.0",
     "typescript": "^5.9.2",
     "wrangler": "^4.25.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "BOT_TOKEN": {
+        "description": "在 Telegram 找 @BotFather 发送 /newbot 创建机器人后拿到的 Token，格式类似 123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "TELEGRAM_WEBHOOK_SECRET": {
+        "description": "随便填一段随机字符串（建议 20 位以上），部署完成后需要用这段字符串注册 Telegram Webhook，作用是防止别人伪造请求"
+      }
+    }
   }
 }

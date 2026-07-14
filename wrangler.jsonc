@@ -7,7 +7,7 @@
   "kv_namespaces": [
     {
       "binding": "BOT_KV",
-      "id": "replace-with-your-kv-id"
+      "id": "auto-provisioned-on-deploy"
     }
   ],
   "ai": {
