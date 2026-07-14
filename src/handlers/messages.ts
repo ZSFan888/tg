@@ -42,6 +42,12 @@ export async function runAiTurn(
 
   await ctx.api.sendChatAction(chatId, 'typing');
 
+  let typingActive = true;
+  const typingInterval = setInterval(() => {
+    if (!typingActive) return;
+    ctx.api.sendChatAction(chatId, 'typing').catch(() => {});
+  }, 4000);
+
   const prefs = await getUserPreferences(ctx.env, userId);
   const { prompt: basePrompt } = resolveSystemPrompt(prefs);
   const history = options.historyOverride ?? (await getChatHistory(ctx.env, chatId));
@@ -104,6 +110,9 @@ export async function runAiTurn(
       await flushEdit('抱歉，AI 服务暂时出了点问题，请稍后再试。', true);
     }
   }, modelId);
+
+  typingActive = false;
+  clearInterval(typingInterval);
 
   const keyboard = new InlineKeyboard()
     .text('› 重新生成', 'regen:last')
