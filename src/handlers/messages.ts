@@ -56,24 +56,37 @@ export async function runAiTurn(
   const history = historyFromStore;
   const modelId = prefs.modelId ?? ctx.env.AI_MODEL;
 
-  const placeholderText = options.editedNotice
-    ? '· 检测到消息已编辑，重新生成回答…'
-    : (prefs.webSearchEnabled && ctx.env.TAVILY_API_KEY ? '· 正在联网搜索…' : '思考中…');
+  const willSearch = prefs.webSearchEnabled && Boolean(ctx.env.TAVILY_API_KEY);
+  let placeholderBase = options.editedNotice
+    ? '· 检测到消息已编辑，重新生成回答'
+    : (willSearch ? '· 正在联网搜索' : '思考中');
 
   const placeholder = await ctx.api.sendMessage(
     chatId,
-    placeholderText,
+    `${placeholderBase}…`,
     replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined
   );
 
+  const DOT_FRAMES = ['', '.', '..', '...'];
+  let dotFrame = 0;
+  let placeholderActive = true;
+  const placeholderInterval = setInterval(() => {
+    if (!placeholderActive) return;
+    dotFrame = (dotFrame + 1) % DOT_FRAMES.length;
+    ctx.api
+      .editMessageText(chatId, placeholder.message_id, `${placeholderBase}${DOT_FRAMES[dotFrame]}`)
+      .catch(() => {});
+  }, 900);
+
   let prompt = basePrompt;
-  if (prefs.webSearchEnabled && ctx.env.TAVILY_API_KEY) {
+  if (willSearch) {
     const searchOutcome = await searchWeb(ctx.env, text);
     const searchContext = buildSearchContext(searchOutcome, text);
     if (searchContext) {
       prompt = `${basePrompt}\n\n${searchContext}`;
     }
-    await ctx.api.editMessageText(chatId, placeholder.message_id, '思考中…').catch(() => {});
+    placeholderBase = '思考中';
+    dotFrame = 0;
   }
 
   let lastEditedText = '';
@@ -101,6 +114,10 @@ export async function runAiTurn(
 
   const finalText = await generateReplyStream(ctx.env, history, text, prompt, {
     onChunk: async (fullTextSoFar) => {
+      if (placeholderActive) {
+        placeholderActive = false;
+        clearInterval(placeholderInterval);
+      }
       const clean = sanitizeMarkdown(fullTextSoFar);
       const display = clean.length > 3800
         ? `${clean.slice(0, 3800)}…`
@@ -108,9 +125,13 @@ export async function runAiTurn(
       await flushEdit(display + TYPING_CURSOR);
     },
     onDone: async (full) => {
+      placeholderActive = false;
+      clearInterval(placeholderInterval);
       await flushEdit(sanitizeMarkdown(full), true);
     },
     onError: async () => {
+      placeholderActive = false;
+      clearInterval(placeholderInterval);
       await flushEdit('抱歉，AI 服务暂时出了点问题，请稍后再试。', true);
     }
   }, modelId);
