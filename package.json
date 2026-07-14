@@ -1,0 +1,21 @@
+{
+  "name": "tg-cf-ai-bot",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "grammy": "^1.38.3",
+    "hono": "^4.9.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260712.0",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.25.0"
+  }
+}

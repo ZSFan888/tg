@@ -1,0 +1,2 @@
+BOT_TOKEN=123456:telegram-bot-token
+TELEGRAM_WEBHOOK_SECRET=replace-this-with-a-random-secret
