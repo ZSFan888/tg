@@ -3,9 +3,26 @@ export interface DailyPoint {
   messageCount: number;
 }
 
+function fmtDayBefore(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function buildUsageChartUrl(history: DailyPoint[]): string {
-  const labels = history.map((h) => h.date.slice(5));
-  const data = history.map((h) => h.messageCount);
+  // Always render a chart, even with just one data point. QuickChart's line
+  // chart needs at least two labels to draw a visible line/area, so pad a
+  // synthetic zero-value point the day before when we only have one real
+  // data point yet (e.g. right after first deploy).
+  const points = history.length >= 1
+    ? history
+    : [];
+  const padded = points.length === 1
+    ? [{ date: fmtDayBefore(points[0].date), messageCount: 0 }, ...points]
+    : points;
+
+  const labels = padded.map((h) => h.date.slice(5));
+  const data = padded.map((h) => h.messageCount);
 
   const config = {
     type: 'line',

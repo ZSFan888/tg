@@ -87,6 +87,34 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     });
   });
 
+  bot.callbackQuery('menu:myid', async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
+    await ctx.answerCallbackQuery();
+
+    const lines = [
+      '» 你的账号信息',
+      '',
+      `用户 ID：${ctx.from.id}`,
+      `用户名：${ctx.from.username ? '@' + ctx.from.username : '（未设置）'}`,
+      `昵称：${ctx.from.first_name}${ctx.from.last_name ? ' ' + ctx.from.last_name : ''}`,
+      `会话 ID（chat id）：${ctx.chat.id}`
+    ];
+
+    await ctx.reply(lines.join('\n'));
+  });
+
+  bot.callbackQuery('menu:ping', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const started = Date.now();
+    const msg = await ctx.reply('检测中…');
+    const latency = Date.now() - started;
+    await ctx.api.editMessageText(
+      msg.chat.id,
+      msg.message_id,
+      `· 系统状态：正常\n· 响应延迟：约 ${latency}ms`
+    );
+  });
+
   bot.callbackQuery('menu:help', async (ctx) => {
     await ctx.answerCallbackQuery();
 
@@ -99,6 +127,8 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       '· 清空上下文 - 重置当前会话记忆',
       '· 使用统计 - 查看今日使用次数和限流',
       '· 导出记录 - 把当前对话保存为文本文件',
+      '· 我的ID - 查看你的 Telegram 用户 ID / 会话 ID',
+      '· 系统状态 - 检测机器人是否在线及响应延迟',
       '',
       '也可以直接发送语音消息，我会自动转成文字再回答。'
     ];
@@ -171,7 +201,7 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       ...(modelLines.length > 0 ? modelLines : ['  暂无调用记录'])
     ].join('\n');
 
-    if (history.length < 2) {
+    if (history.length === 0) {
       await ctx.reply(summary);
       return;
     }

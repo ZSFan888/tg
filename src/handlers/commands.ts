@@ -43,6 +43,9 @@ export function registerCommands(bot: Bot<BotContext>) {
       .text('使用统计', 'menu:usage')
       .row()
       .text('导出记录', 'menu:export')
+      .text('我的ID', 'menu:myid')
+      .row()
+      .text('系统状态', 'menu:ping')
       .text('帮助说明', 'menu:help');
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
@@ -266,7 +269,7 @@ export function registerCommands(bot: Bot<BotContext>) {
       ...(modelLines.length > 0 ? modelLines : ['  暂无调用记录'])
     ].join('\n');
 
-    if (history.length < 2) {
+    if (history.length === 0) {
       await ctx.reply(summary);
       return;
     }
