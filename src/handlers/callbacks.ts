@@ -1,4 +1,4 @@
-import { InlineKeyboard } from 'grammy';
+import { InlineKeyboard, InputFile } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import type { PersonaKey } from '../types/env';
@@ -7,14 +7,236 @@ import { getUserPreferences, setUserPersona, setUserModel, setWebSearchEnabled }
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
-import { getModelByKey } from '../config/models';
+import { MODELS, getModelById, getModelByKey } from '../config/models';
 import { getFollowUps } from '../storage/followup-store';
 import { runAiTurn } from './messages';
+import { isAdmin } from '../utils/access';
+import { getAllKnownUsers } from '../storage/users-store';
+import { getGlobalStats, getStatsHistory, getModelStats } from '../storage/usage-store';
+import { buildUsageChartUrl } from '../services/chart';
+import {
+  getTodayNeuronUsage,
+  getNeuronUsageHistory,
+  projectDepletionHour,
+  DAILY_FREE_NEURONS_CONST
+} from '../storage/neurons-store';
 
 export function registerCallbacks(bot: Bot<BotContext>) {
   bot.callbackQuery('menu:chat', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.reply('可以开始了，直接发送你的问题。');
+  });
+
+  bot.callbackQuery('menu:model', async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
+
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const current = getModelById(prefs.modelId ?? ctx.env.AI_MODEL);
+
+    const keyboard = new InlineKeyboard();
+    for (const model of MODELS) {
+      const label = model.id === current.id ? `» ${model.label}` : model.label;
+      keyboard.text(label, `model:${model.key}`).row();
+    }
+
+    await ctx.reply(
+      `当前模型：${current.label}\n${current.note}\n\n选择一个新的模型：`,
+      { reply_markup: keyboard }
+    );
+  });
+
+  bot.callbackQuery('menu:websearch', async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
+
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const enabled = Boolean(prefs.webSearchEnabled);
+
+    const keyboard = new InlineKeyboard()
+      .text(enabled ? '» 已开启' : '已开启', 'websearch:on')
+      .text(enabled ? '已关闭' : '» 已关闭', 'websearch:off');
+
+    await ctx.reply(
+      `联网搜索：${enabled ? '已开启' : '已关闭'}\n开启后，每次提问会先搜索最新信息再回答。\n选择新的状态：`,
+      { reply_markup: keyboard }
+    );
+  });
+
+  bot.callbackQuery('menu:export', async (ctx) => {
+    if (!ctx.chat) return;
+    await ctx.answerCallbackQuery();
+
+    const history = await getChatHistory(ctx.env, ctx.chat.id);
+    if (history.length === 0) {
+      await ctx.reply('当前没有可导出的对话记录。');
+      return;
+    }
+
+    const lines = history.map((msg) => {
+      const speaker = msg.role === 'user' ? '我' : 'AI';
+      return `[${speaker}] ${msg.content}`;
+    });
+
+    const text = lines.join('\n\n');
+    const bytes = new TextEncoder().encode(text);
+    const filename = `chat-export-${new Date().toISOString().slice(0, 10)}.txt`;
+
+    await ctx.replyWithDocument(new InputFile(bytes, filename), {
+      caption: `对话记录导出，共 ${history.length} 条消息。`
+    });
+  });
+
+  bot.callbackQuery('menu:help', async (ctx) => {
+    await ctx.answerCallbackQuery();
+
+    const lines = [
+      '可用功能：',
+      '· 直接发消息即可聊天',
+      '· 偏好设置 - 切换回复风格/自定义提示词',
+      '· 切换模型 - 选择不同能力/速度的 AI 模型',
+      '· 联网搜索 - 开启后先搜索最新信息再回答',
+      '· 清空上下文 - 重置当前会话记忆',
+      '· 使用统计 - 查看今日使用次数和限流',
+      '· 导出记录 - 把当前对话保存为文本文件',
+      '',
+      '也可以直接发送语音消息，我会自动转成文字再回答。'
+    ];
+
+    if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
+      lines.push(
+        '',
+        '管理员专用（仍需直接输入命令）：',
+        '/stats - 查看全局使用统计',
+        '/neurons - 查看今日 Neurons 用量预估',
+        '/broadcast <内容> - 群发通知给所有已知用户',
+        '/ban <用户ID> [分钟数] [原因] - 禁用用户',
+        '/unban <用户ID> - 解除禁用'
+      );
+    }
+
+    await ctx.reply(lines.join('\n'));
+  });
+
+  bot.callbackQuery('menu:admin', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.answerCallbackQuery({ text: '仅管理员可用' });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+
+    const keyboard = new InlineKeyboard()
+      .text('全局统计', 'menu:stats')
+      .text('Neurons 用量', 'menu:neurons');
+
+    await ctx.reply(
+      '管理员选项：\n· 全局统计 / Neurons 用量可直接点按钮查看\n· 群发、禁用/解禁用户仍需输入命令：\n  /broadcast <内容>\n  /ban <用户ID> [分钟数] [原因]\n  /unban <用户ID>',
+      { reply_markup: keyboard }
+    );
+  });
+
+  bot.callbackQuery('menu:stats', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.answerCallbackQuery({ text: '仅管理员可用' });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+
+    const [users, global, history, modelStats] = await Promise.all([
+      getAllKnownUsers(ctx.env),
+      getGlobalStats(ctx.env),
+      getStatsHistory(ctx.env),
+      getModelStats(ctx.env)
+    ]);
+
+    const now = Date.now();
+    const activeToday = users.filter((u) => now - u.lastSeenAt < 24 * 60 * 60 * 1000).length;
+    const activeWeek = users.filter((u) => now - u.lastSeenAt < 7 * 24 * 60 * 60 * 1000).length;
+
+    const modelLines = MODELS
+      .map((m) => ({ label: m.label, count: modelStats[m.id] ?? 0 }))
+      .filter((m) => m.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .map((m) => `  ${m.label}：${m.count} 次`);
+
+    const summary = [
+      '» 全局使用统计',
+      '',
+      `累计用户数：${users.length}`,
+      `今日活跃用户：${activeToday}`,
+      `近 7 天活跃用户：${activeWeek}`,
+      `今日消息总数：${global.messageCount}`,
+      '',
+      '按模型调用次数（累计）：',
+      ...(modelLines.length > 0 ? modelLines : ['  暂无调用记录'])
+    ].join('\n');
+
+    if (history.length < 2) {
+      await ctx.reply(summary);
+      return;
+    }
+
+    try {
+      const chartUrl = buildUsageChartUrl(history);
+      await ctx.replyWithPhoto(chartUrl, { caption: summary });
+    } catch (err) {
+      console.error('Failed to render usage chart:', err);
+      await ctx.reply(summary);
+    }
+  });
+
+  bot.callbackQuery('menu:neurons', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.answerCallbackQuery({ text: '仅管理员可用' });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+
+    const [today, history] = await Promise.all([
+      getTodayNeuronUsage(ctx.env),
+      getNeuronUsageHistory(ctx.env, 7)
+    ]);
+
+    const used = Math.round(today.total);
+    const percent = Math.min(100, Math.round((used / DAILY_FREE_NEURONS_CONST) * 100));
+    const remaining = Math.max(0, DAILY_FREE_NEURONS_CONST - used);
+
+    const barLength = 20;
+    const filled = Math.round((percent / 100) * barLength);
+    const bar = '█'.repeat(filled) + '░'.repeat(barLength - filled);
+
+    const projection = projectDepletionHour(used);
+
+    const lines = [
+      '» 今日 Neurons 使用预估',
+      '',
+      `${bar} ${percent}%`,
+      `已用：约 ${used} / ${DAILY_FREE_NEURONS_CONST}（免费额度）`,
+      `剩余：约 ${remaining}`,
+      `今日调用：文字 ${today.chatCalls} 次，语音 ${today.audioCalls} 次`,
+      ''
+    ];
+
+    if (projection.willExhaustToday && projection.estimatedExhaustionHourUtc !== null) {
+      const hour = Math.floor(projection.estimatedExhaustionHourUtc);
+      const minute = Math.round((projection.estimatedExhaustionHourUtc - hour) * 60);
+      lines.push(`⚠ 按当前速度预计将在 UTC ${hour}:${String(minute).padStart(2, '0')} 左右用完今日免费额度`);
+    } else if (percent >= 80) {
+      lines.push('⚠ 今日额度消耗已超过 80%，请注意使用频率');
+    } else {
+      lines.push('· 按当前速度，今日额度预计够用');
+    }
+
+    lines.push('', '注：此数据为估算值，基于各模型官方 Token 单价换算，可能与 Cloudflare 后台精确计费略有差异。');
+
+    if (history.filter((h) => h.total > 0).length >= 2) {
+      const historyLines = history
+        .filter((h) => h.total > 0)
+        .map((h) => `  ${h.date}：约 ${Math.round(h.total)} neurons`);
+      lines.push('', '近期每日消耗：', ...historyLines);
+    }
+
+    await ctx.reply(lines.join('\n'));
   });
 
   bot.callbackQuery('menu:clear', async (ctx) => {

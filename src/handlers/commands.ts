@@ -36,32 +36,44 @@ export function registerCommands(bot: Bot<BotContext>) {
       .text('开始聊天', 'menu:chat')
       .text('偏好设置', 'menu:settings')
       .row()
+      .text('切换模型', 'menu:model')
+      .text('联网搜索', 'menu:websearch')
+      .row()
       .text('清空上下文', 'menu:clear')
-      .text('使用统计', 'menu:usage');
+      .text('使用统计', 'menu:usage')
+      .row()
+      .text('导出记录', 'menu:export')
+      .text('帮助说明', 'menu:help');
+
+    if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
+      keyboard.row().text('管理员选项', 'menu:admin');
+    }
 
     await ctx.reply(
-      '你好，我已经在线。\n直接给我发消息就能聊天，也可以用下方按钮。',
+      '你好，我已经在线。\n直接给我发消息就能聊天，也可以用下方按钮查看全部功能。',
       { reply_markup: keyboard }
     );
   });
 
   bot.command('help', async (ctx) => {
     const lines = [
-      '可用命令：',
-      '/start - 打开欢迎菜单',
-      '/chat - 提示进入聊天模式',
-      '/settings - 切换回复风格',
-      '/setprompt - 设置自定义系统提示词',
-      '/usage - 查看今日使用次数',
-      '/clear - 清空当前会话上下文',
-      '/export - 导出当前对话记录为文本文件',
-      '/websearch - 用按钮开启/关闭联网搜索',
-      '/model - 查看并切换 AI 模型',
-      '/ping - 健康检查'
+      '发送 /start 可以打开功能菜单，里面的按钮包含了绝大部分功能：',
+      '· 开始聊天 / 偏好设置 / 切换模型 / 联网搜索',
+      '· 清空上下文 / 使用统计 / 导出记录',
+      '',
+      '也可以直接发送文字或语音消息，我会自动回复。'
     ];
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
-      lines.push('', '管理员专用：', '/stats - 查看全局使用统计（含趋势图）', '/neurons - 查看今日 Neurons 用量预估', '/broadcast <内容> - 群发通知给所有已知用户', '/ban <用户ID> [分钟数] [原因] - 禁用用户', '/unban <用户ID> - 解除禁用');
+      lines.push(
+        '',
+        '管理员专用（仍需直接输入命令）：',
+        '/stats - 查看全局使用统计（含趋势图）',
+        '/neurons - 查看今日 Neurons 用量预估',
+        '/broadcast <内容> - 群发通知给所有已知用户',
+        '/ban <用户ID> [分钟数] [原因] - 禁用用户',
+        '/unban <用户ID> - 解除禁用'
+      );
     }
 
     await ctx.reply(lines.join('\n'));
