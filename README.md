@@ -27,9 +27,21 @@
 
 1. 如果还没登录，先登录/注册 Cloudflare 账号（免费）
 2. 授权 Cloudflare 读取你的 GitHub 账号（用于把这个项目 fork 一份到你自己的账号下）
-3. 页面会让你填两个值：
-   - `BOT_TOKEN` → 粘贴刚才从 @BotFather 拿到的 token
-   - `TELEGRAM_WEBHOOK_SECRET` → 随便输入一段随机字符串（比如 `myBot2026SecretKey888`），只要自己记得住，20 位以上更安全
+3. 页面会展示一个配置表单，一共 8 个字段，逐个说明如下：
+
+| 字段名 | 要不要改 | 具体填什么 |
+|---|---|---|
+| `BOT_TOKEN` | **必填** | 粘贴从 @BotFather 拿到的 Token，格式类似 `123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `TELEGRAM_WEBHOOK_SECRET` | **必填** | 随便输入一段随机字符串（比如 `myBot2026SecretKey888`），自己记住即可，20 位以上更安全，注册 webhook 时要再用一次 |
+| `BOT_WEBHOOK_PATH` | 不用改 | 保持默认的 `/telegram/webhook` |
+| `ALLOWED_USER_IDS` | **可以留空** | 这是白名单，留空表示任何人都能私聊这个机器人；如果只想自己/特定人用，去 Telegram 找 `@userinfobot` 查用户 id，填进来，多个用英文逗号分隔，例如 `123456789,987654321` |
+| `AI_MODEL` | 不用改 | 保持默认的 `@cf/meta/llama-3.2-1b-instruct`（免费模型） |
+| `SYSTEM_PROMPT` | 不用改 | 保持默认的中文助手人设即可，之后可以在机器人里用 `/settings` 按用户单独切换风格 |
+| `MAX_HISTORY` | 不用改 | 保持默认值 `8`，表示记住最近 8 轮对话 |
+| `RATE_LIMIT_PER_MINUTE` | 不用改 | 保持默认值 `12`，表示每个用户每分钟最多问 12 次 |
+
+简单说：**只需要填好 `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET` 这两项，其他保持默认或留空即可**。
+
 4. 点击 **Deploy**
 
 Cloudflare 会自动：
