@@ -1,24 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tg-cf-ai-bot",
-  "pages_build_output_dir": "public",
   "compatibility_date": "2026-07-14",
-  "compatibility_flags": ["nodejs_compat"],
-  "ai": {
-    "binding": "AI"
-  },
-  "kv_namespaces": [
-    {
-      "binding": "BOT_KV",
-      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
-    }
-  ],
-  "vars": {
-    "BOT_WEBHOOK_PATH": "/telegram/webhook",
-    "ALLOWED_USER_IDS": "all",
-    "AI_MODEL": "@cf/meta/llama-3.2-1b-instruct",
-    "SYSTEM_PROMPT": "你是一个简洁、友好的 Telegram 私聊助手。优先用中文回答，回答要直接，不要废话。",
-    "MAX_HISTORY": "8",
-    "RATE_LIMIT_PER_MINUTE": "12"
-  }
+  "compatibility_flags": ["nodejs_compat"]
 }

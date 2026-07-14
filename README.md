@@ -64,23 +64,16 @@
 
 ## 第 4 步：绑定 KV 和 Workers AI
 
-**重要**：因为项目里的 `wrangler.jsonc` 已经指定了 `pages_build_output_dir`，Cloudflare 会把这个配置文件当作绑定的唯一来源，仪表盘上的"添加绑定"入口会被禁用（这是 Cloudflare 的正常机制，不是故障）。所以 KV 绑定需要写进 `wrangler.jsonc` 文件里，步骤如下：
+这个仓库的 `wrangler.jsonc` 只保留了本地开发用的基础配置（没有加 `pages_build_output_dir`），所以生产环境的绑定完全可以在仪表盘上点选完成，不需要改代码文件：
 
-1. 登录 [dash.cloudflare.com](https://dash.cloudflare.com)，左侧菜单点 **存储和数据库 (Storage & Databases) → KV**
-2. 点击 **创建命名空间 (Create namespace)**，起个名字比如 `tg-bot-kv`，创建后会看到一个类似 `a1b2c3d4e5f6...` 的**命名空间 ID**，复制它
-3. 回到你 fork 的 GitHub 仓库，打开 `wrangler.jsonc` 文件，点右上角的编辑（铅笔图标）
-4. 找到这一段：
-   ```json
-   "kv_namespaces": [
-     {
-       "binding": "BOT_KV",
-       "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
-     }
-   ]
-   ```
-5. 把 `REPLACE_WITH_YOUR_KV_NAMESPACE_ID` 替换成你刚复制的命名空间 ID，注意保留双引号
-6. 点击 **Commit changes**，提交到 `main` 分支
-7. 提交后 Cloudflare 会自动检测到新代码并重新部署，`AI` 绑定不需要额外配置（已经写在文件里了）
+1. 部署完成后，进入这个 Pages 项目详情页
+2. 点击顶部标签栏的 **设置 (Settings) → 函数 (Functions)**
+3. 找到 **KV 命名空间绑定 (KV namespace bindings)**，点击 **添加绑定**：
+   - 变量名称填 `BOT_KV`
+   - 点击 **创建新的命名空间 (Create new)**，起个名字比如 `tg-bot-kv`，直接创建并绑定，不需要手动填任何 ID
+4. 同一个页面找到 **Workers AI 绑定**，点击 **添加绑定**：
+   - 变量名称填 `AI`
+5. 保存后，回到 **部署 (Deployments)** 标签页，点击最新一次部署旁边的菜单，选择 **重新部署 (Retry deployment)**，让新绑定生效
 
 ---
 
@@ -206,12 +199,12 @@ curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
 **访问 pages.dev 网址或 /healthz 报错**
 
 - 检查 **设置 → 环境变量**，确认 `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET` 都已经填写并保存（Pages 的环境变量不会像 Workers 那样被自动部署清空，填一次就会一直保留）
-- 检查 `wrangler.jsonc` 里的 `kv_namespaces` 那一段，确认 `id` 已经替换成真实的 KV 命名空间 ID，不是还留着 `REPLACE_WITH_YOUR_KV_NAMESPACE_ID` 占位符
-- 改完 `wrangler.jsonc` 后一定要提交（Commit changes），Cloudflare 检测到新提交会自动重新部署
+- 检查 **设置 → 函数 (Functions)**，确认 `BOT_KV` 和 `AI` 两个绑定都已经添加
+- 改完绑定后一定要去 **部署 (Deployments)** 页面点一次"重新部署"，新配置才会生效
 
 **仪表盘上找不到"添加绑定"按钮**
 
-这是正常现象。因为项目用了 `wrangler.jsonc` 里的 `pages_build_output_dir`，Cloudflare 会强制要求所有绑定都写在这个文件里，仪表盘的绑定入口会被禁用。回第 4 步在配置文件里手动加 KV 命名空间 ID 即可。
+如果出现这种情况，说明 `wrangler.jsonc` 里被加上了 `pages_build_output_dir` 这个字段——一旦有这个字段，Cloudflare 会把整个配置文件当作绑定的唯一来源，仪表盘的绑定入口就会被禁用。这个仓库默认的 `wrangler.jsonc` 里没有这个字段，如果你看到这个问题，检查一下这个文件有没有被意外改动过。
 
 **机器人在 Telegram 里没有任何回复**
 
