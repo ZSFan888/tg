@@ -47,9 +47,12 @@ export async function runAiTurn(
     ctx.api.sendChatAction(chatId, 'typing').catch(() => {});
   }, 4000);
 
-  const prefs = await getUserPreferences(ctx.env, userId);
+  const [prefs, historyFromStore] = await Promise.all([
+    getUserPreferences(ctx.env, userId),
+    options.historyOverride ? Promise.resolve(options.historyOverride) : getChatHistory(ctx.env, chatId)
+  ]);
   const { prompt: basePrompt } = resolveSystemPrompt(prefs);
-  const history = options.historyOverride ?? (await getChatHistory(ctx.env, chatId));
+  const history = historyFromStore;
   const modelId = prefs.modelId ?? ctx.env.AI_MODEL;
 
   const placeholderText = options.editedNotice
@@ -125,15 +128,16 @@ export async function runAiTurn(
     // ignore if message content changed concurrently
   }
 
-  await saveChatHistory(ctx.env, chatId, [
-    ...history,
-    { role: 'user', content: text },
-    { role: 'assistant', content: finalText }
+  await Promise.all([
+    saveChatHistory(ctx.env, chatId, [
+      ...history,
+      { role: 'user', content: text },
+      { role: 'assistant', content: finalText }
+    ]),
+    incrementUsage(ctx.env, userId),
+    incrementGlobalStats(ctx.env),
+    incrementModelUsage(ctx.env, modelId)
   ]);
-
-  await incrementUsage(ctx.env, userId);
-  await incrementGlobalStats(ctx.env);
-  await incrementModelUsage(ctx.env, modelId);
 
   ctx.waitUntil(
     generateFollowUps(ctx.env, text, finalText, modelId)

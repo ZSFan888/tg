@@ -52,12 +52,6 @@ export async function getKnownUser(env: Env, userId: number): Promise<KnownUser 
 
 export async function getAllKnownUsers(env: Env): Promise<KnownUser[]> {
   const index = await getUserIndex(env);
-  const users: KnownUser[] = [];
-
-  for (const userId of index) {
-    const user = await getKnownUser(env, userId);
-    if (user) users.push(user);
-  }
-
-  return users;
+  const users = await Promise.all(index.map((userId) => getKnownUser(env, userId)));
+  return users.filter((u): u is KnownUser => u !== null);
 }

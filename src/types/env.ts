@@ -11,6 +11,8 @@ export interface Env {
   BOT_KV: KVNamespace;
   AI: Ai;
   TAVILY_API_KEY?: string;
+  GROUP_MENTION_REQUIRED?: string;
+  BOT_USERNAME?: string;
 }
 
 export type ChatRole = 'system' | 'user' | 'assistant';

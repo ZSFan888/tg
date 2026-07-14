@@ -18,6 +18,7 @@ export function registerCallbacks(bot: Bot<BotContext>) {
   });
 
   bot.callbackQuery('menu:clear', async (ctx) => {
+    if (!ctx.chat) return;
     await clearChatHistory(ctx.env, ctx.chat.id);
     await ctx.answerCallbackQuery({ text: '上下文已清空' });
     await ctx.reply('历史上下文已重置。');
