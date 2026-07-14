@@ -45,7 +45,7 @@ export async function runAiTurn(
 
   const placeholder = await ctx.api.sendMessage(
     chatId,
-    prefs.webSearchEnabled && ctx.env.TAVILY_API_KEY ? '🔍 正在联网搜索…' : '思考中…',
+    prefs.webSearchEnabled && ctx.env.TAVILY_API_KEY ? '正在联网搜索…' : '思考中…',
     replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined
   );
 
@@ -97,7 +97,7 @@ export async function runAiTurn(
     }
   }, modelId);
 
-  const keyboard = new InlineKeyboard().text('🔄 重新生成', 'regen:last');
+  const keyboard = new InlineKeyboard().text('重新生成', 'regen:last');
   try {
     await ctx.api.editMessageReplyMarkup(chatId, placeholder.message_id, {
       reply_markup: keyboard

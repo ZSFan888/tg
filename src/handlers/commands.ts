@@ -70,11 +70,11 @@ export function registerCommands(bot: Bot<BotContext>) {
 
     const keyboard = new InlineKeyboard();
     for (const persona of listPersonas()) {
-      const label = persona.key === prefs.persona ? `✓ ${persona.label}` : persona.label;
+      const label = persona.key === prefs.persona ? `[当前] ${persona.label}` : persona.label;
       keyboard.text(label, `persona:${persona.key}`).row();
     }
     keyboard.text(
-      prefs.persona === 'custom' ? '✓ 自定义模式' : '自定义模式（输入你自己的提示词）',
+      prefs.persona === 'custom' ? '[当前] 自定义模式' : '自定义模式（输入你自己的提示词）',
       'menu:setprompt'
     );
 
@@ -103,7 +103,7 @@ export function registerCommands(bot: Bot<BotContext>) {
 
     const keyboard = new InlineKeyboard();
     for (const model of MODELS) {
-      const label = model.id === current.id ? `✓ ${model.label}` : model.label;
+      const label = model.id === current.id ? `[当前] ${model.label}` : model.label;
       keyboard.text(label, `model:${model.key}`).row();
     }
 
@@ -135,8 +135,8 @@ export function registerCommands(bot: Bot<BotContext>) {
 
     await ctx.reply(
       nextState
-        ? '✅ 联网搜索已开启。之后每次提问，我会先搜索最新信息再回答。再发一次 /websearch 可以关闭。'
-        : '❌ 联网搜索已关闭，回到只用模型自身知识回答。'
+        ? '联网搜索已开启。之后每次提问，我会先搜索最新信息再回答。再发一次 /websearch 可以关闭。'
+        : '联网搜索已关闭，回到只用模型自身知识回答。'
     );
   });
 
@@ -177,7 +177,7 @@ export function registerCommands(bot: Bot<BotContext>) {
     const activeWeek = users.filter((u) => now - u.lastSeenAt < 7 * 24 * 60 * 60 * 1000).length;
 
     await ctx.reply([
-      '📊 全局使用统计',
+      '全局使用统计',
       '',
       `累计用户数：${users.length}`,
       `今日活跃用户：${activeToday}`,
@@ -211,7 +211,7 @@ export function registerCommands(bot: Bot<BotContext>) {
 
     for (const user of users) {
       try {
-        await ctx.api.sendMessage(user.chatId, `📢 系统通知\n\n${content}`);
+        await ctx.api.sendMessage(user.chatId, `系统通知\n\n${content}`);
         success += 1;
       } catch {
         failed += 1;
