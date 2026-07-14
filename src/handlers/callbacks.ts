@@ -2,12 +2,13 @@ import { InlineKeyboard } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import type { PersonaKey } from '../types/env';
-import { clearChatHistory } from '../storage/chat-store';
+import { clearChatHistory, getChatHistory } from '../storage/chat-store';
 import { getUserPreferences, setUserPersona, setUserModel } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
 import { getModelByKey } from '../config/models';
+import { runAiTurn } from './messages';
 
 export function registerCallbacks(bot: Bot<BotContext>) {
   bot.callbackQuery('menu:chat', async (ctx) => {
@@ -84,5 +85,37 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
     await ctx.answerCallbackQuery({ text: `已切换到${model.label}` });
     await ctx.editMessageText(`模型已切换为：${model.label}\n${model.note}`);
+  });
+
+  bot.callbackQuery('regen:last', async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
+
+    const history = await getChatHistory(ctx.env, ctx.chat.id);
+    const lastUserIndex = history.map((m) => m.role).lastIndexOf('user');
+
+    if (lastUserIndex === -1) {
+      await ctx.answerCallbackQuery({ text: '没有可重新生成的消息' });
+      return;
+    }
+
+    const lastUserMsg = history[lastUserIndex];
+    const historyWithoutLastTurn = history.slice(0, lastUserIndex);
+
+    await ctx.answerCallbackQuery({ text: '正在重新生成…' });
+
+    try {
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+    } catch {
+      // ignore
+    }
+
+    await runAiTurn(
+      ctx,
+      ctx.chat.id,
+      ctx.from.id,
+      lastUserMsg.content,
+      undefined,
+      { historyOverride: historyWithoutLastTurn, isRegenerate: true }
+    );
   });
 }

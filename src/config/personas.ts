@@ -10,7 +10,7 @@ export const PERSONAS: Record<Exclude<PersonaKey, 'custom'>, Persona> = {
   default: {
     key: 'default',
     label: '默认助手',
-    prompt: '你是一个简洁、友好的 Telegram 私聊助手。优先用中文回答，回答要直接，不要废话。'
+    prompt: '你是一个认真、可靠的 Telegram 私聊助手。优先用中文回答。回答要切题、有实质内容，不要敷衍或过度简短；如果问题复杂，先想清楚再回答，必要时分点说明；如果不确定，明确说出不确定，不要编造信息。'
   },
   concise: {
     key: 'concise',

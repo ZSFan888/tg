@@ -175,6 +175,7 @@ https://<你的Pages网址>/setup-menu?secret=<你的TELEGRAM_WEBHOOK_SECRET>
 - **管理员后台**：`/stats` 查看全局使用统计，`/broadcast` 一键群发通知
 - **对话导出**：`/export` 把当前上下文导出成 txt 文件
 - **联网搜索**：`/websearch` 开启后，回答会先搜索最新网络信息再总结（基于 Tavily API）
+- **重新生成**：每条 AI 回复下方都有"🔄 重新生成"按钮，不满意可以直接换一版答案
 
 ---
 
