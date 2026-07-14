@@ -12,8 +12,9 @@ import { incrementUsage, incrementGlobalStats, incrementModelUsage } from '../st
 import { registerKnownUser } from '../storage/users-store';
 import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
+import { createAccessRequest, getAccessRequest } from '../storage/access-request-store';
 import { resolveSystemPrompt } from '../config/personas';
-import { isUserAllowed } from '../utils/access';
+import { isUserAllowed, isAdmin, parseCsvNumbers } from '../utils/access';
 import { searchWeb, buildSearchContext } from '../services/search';
 import type { ChatMessage } from '../types/env';
 
@@ -165,6 +166,31 @@ export async function runAiTurn(
     });
 }
 
+async function notifyAdminsOfAccessRequest(
+  ctx: BotContext,
+  userId: number,
+  username: string | undefined,
+  firstName: string | undefined
+) {
+  const adminIds = parseCsvNumbers(ctx.env.ADMIN_USER_IDS);
+  if (adminIds.length === 0) return;
+
+  const label = username ? `@${username}` : (firstName ?? `用户 ${userId}`);
+  const keyboard = new InlineKeyboard()
+    .text('✓ 批准', `access-approve:${userId}`)
+    .text('✗ 拒绝', `access-deny:${userId}`);
+
+  await Promise.all(
+    adminIds.map((adminId) =>
+      ctx.api.sendMessage(
+        adminId,
+        `» 新的访问申请\n用户：${label}\nID：${userId}`,
+        { reply_markup: keyboard }
+      ).catch(() => {})
+    )
+  );
+}
+
 export function registerMessages(bot: Bot<BotContext>) {
   bot.on(['message:text', 'edited_message:text'], async (ctx) => {
     const rawText = ctx.message?.text ?? ctx.editedMessage?.text ?? '';
@@ -174,8 +200,18 @@ export function registerMessages(bot: Bot<BotContext>) {
     if (!ctx.from) return;
     if (!ctx.chat) return;
 
-    if (!isUserAllowed(ctx.env, ctx.from.id)) {
-      if (!isEdited) await ctx.reply('抱歉，你没有使用这个机器人的权限。');
+    if (!(await isUserAllowed(ctx.env, ctx.from.id))) {
+      if (isEdited) return;
+
+      const existing = await getAccessRequest(ctx.env, ctx.from.id);
+      if (existing) {
+        await ctx.reply('你的访问申请正在等待管理员审核，请耐心等待。');
+        return;
+      }
+
+      await createAccessRequest(ctx.env, ctx.from.id, ctx.from.username, ctx.from.first_name);
+      await ctx.reply('抱歉，你没有使用这个机器人的权限。你的访问申请已经发送给管理员，通过后会自动通知你。');
+      await notifyAdminsOfAccessRequest(ctx, ctx.from.id, ctx.from.username, ctx.from.first_name);
       return;
     }
 

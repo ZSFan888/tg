@@ -9,6 +9,8 @@ import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
 import { getModelByKey } from '../config/models';
 import { getFollowUps } from '../storage/followup-store';
+import { clearAccessRequest } from '../storage/access-request-store';
+import { approveUser, isAdmin as isAdminUser } from '../utils/access';
 import { runAiTurn } from './messages';
 
 export function registerCallbacks(bot: Bot<BotContext>) {
@@ -122,6 +124,38 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
   bot.callbackQuery('noop', async (ctx) => {
     await ctx.answerCallbackQuery({ text: '追问生成中，请稍候…' });
+  });
+
+  bot.callbackQuery(/^access-approve:(\d+)$/, async (ctx) => {
+    if (!ctx.from || !isAdminUser(ctx.env, ctx.from.id)) {
+      await ctx.answerCallbackQuery({ text: '仅管理员可操作' });
+      return;
+    }
+
+    const targetId = Number(ctx.match?.[1]);
+
+    await approveUser(ctx.env, targetId);
+    await clearAccessRequest(ctx.env, targetId);
+
+    await ctx.answerCallbackQuery({ text: '已批准' });
+    await ctx.editMessageText(`» 访问申请已批准\n用户 ID：${targetId}`);
+
+    await ctx.api.sendMessage(targetId, '你的访问申请已通过，现在可以直接和我聊天了。').catch(() => {});
+  });
+
+  bot.callbackQuery(/^access-deny:(\d+)$/, async (ctx) => {
+    if (!ctx.from || !isAdminUser(ctx.env, ctx.from.id)) {
+      await ctx.answerCallbackQuery({ text: '仅管理员可操作' });
+      return;
+    }
+
+    const targetId = Number(ctx.match?.[1]);
+    await clearAccessRequest(ctx.env, targetId);
+
+    await ctx.answerCallbackQuery({ text: '已拒绝' });
+    await ctx.editMessageText(`» 访问申请已拒绝\n用户 ID：${targetId}`);
+
+    await ctx.api.sendMessage(targetId, '很抱歉，你的访问申请没有通过。').catch(() => {});
   });
 
   bot.callbackQuery(/^followup:(\d+):(\d+)$/, async (ctx) => {

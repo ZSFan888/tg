@@ -71,6 +71,13 @@ export interface BanRecord {
   reason?: string;
 }
 
+export interface AccessRequest {
+  userId: number;
+  username?: string;
+  firstName?: string;
+  requestedAt: number;
+}
+
 export type PendingAction = 'awaiting_custom_prompt';
 
 export interface PendingState {

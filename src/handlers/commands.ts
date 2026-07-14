@@ -13,6 +13,8 @@ import { getAllKnownUsers } from '../storage/users-store';
 import { getGlobalStats, getStatsHistory, getModelStats } from '../storage/usage-store';
 import { banUser, unbanUser } from '../storage/ban-store';
 import { buildUsageChartUrl } from '../services/chart';
+import { getPendingRequests, clearAccessRequest } from '../storage/access-request-store';
+import { approveUser, revokeUserApproval } from '../utils/access';
 
 export function registerCommands(bot: Bot<BotContext>) {
   bot.command('start', async (ctx) => {
@@ -55,7 +57,7 @@ export function registerCommands(bot: Bot<BotContext>) {
     ];
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
-      lines.push('', '管理员专用：', '/stats - 查看全局使用统计（含趋势图）', '/broadcast <内容> - 群发通知给所有已知用户', '/ban <用户ID> [分钟数] [原因] - 禁用用户', '/unban <用户ID> - 解除禁用');
+      lines.push('', '管理员专用：', '/stats - 查看全局使用统计（含趋势图）', '/broadcast <内容> - 群发通知给所有已知用户', '/ban <用户ID> [分钟数] [原因] - 禁用用户', '/unban <用户ID> - 解除禁用', '/requests - 查看待审核的访问申请', '/revoke <用户ID> - 撤销已批准用户的访问权限');
     }
 
     await ctx.reply(lines.join('\n'));
@@ -250,6 +252,48 @@ export function registerCommands(bot: Bot<BotContext>) {
 
     await unbanUser(ctx.env, targetId);
     await ctx.reply(`已解除用户 ${targetId} 的禁用。`);
+  });
+
+  bot.command('requests', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.reply('这个命令仅管理员可用。');
+      return;
+    }
+
+    const requests = await getPendingRequests(ctx.env);
+    if (requests.length === 0) {
+      await ctx.reply('当前没有待审核的访问申请。');
+      return;
+    }
+
+    for (const req of requests) {
+      const label = req.username ? `@${req.username}` : (req.firstName ?? `用户 ${req.userId}`);
+      const keyboard = new InlineKeyboard()
+        .text('✓ 批准', `access-approve:${req.userId}`)
+        .text('✗ 拒绝', `access-deny:${req.userId}`);
+
+      await ctx.reply(
+        `» 待审核申请\n用户：${label}\nID：${req.userId}\n申请时间：${new Date(req.requestedAt).toLocaleString('zh-CN')}`,
+        { reply_markup: keyboard }
+      );
+    }
+  });
+
+  bot.command('revoke', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.reply('这个命令仅管理员可用。');
+      return;
+    }
+
+    const targetId = Number(ctx.match?.trim());
+    if (!targetId || Number.isNaN(targetId)) {
+      await ctx.reply('用法：/revoke <用户ID>\n只能撤销通过 /requests 审批流程批准的用户，写在环境变量 ALLOWED_USER_IDS 里的用户不受影响。');
+      return;
+    }
+
+    await revokeUserApproval(ctx.env, targetId);
+    await clearAccessRequest(ctx.env, targetId);
+    await ctx.reply(`已撤销用户 ${targetId} 的访问权限。`);
   });
 
   bot.command('broadcast', async (ctx) => {
