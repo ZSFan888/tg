@@ -5,11 +5,11 @@ import { registerCommands } from '../handlers/commands';
 import { registerCallbacks } from '../handlers/callbacks';
 import { registerMessages } from '../handlers/messages';
 
-export function createBot(env: Env) {
+export function createBot(env: Env, waitUntil: (promise: Promise<unknown>) => void) {
   const bot = new Bot<BotContext>(env.BOT_TOKEN);
 
   bot.use(async (ctx, next) => {
-    Object.assign(ctx, { env });
+    Object.assign(ctx, { env, waitUntil });
     await next();
   });
 

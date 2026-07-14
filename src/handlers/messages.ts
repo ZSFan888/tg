@@ -135,7 +135,8 @@ export async function runAiTurn(
   await incrementGlobalStats(ctx.env);
   await incrementModelUsage(ctx.env, modelId);
 
-  generateFollowUps(ctx.env, text, finalText, modelId)
+  ctx.waitUntil(
+    generateFollowUps(ctx.env, text, finalText, modelId)
     .then(async (questions) => {
       const followKeyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
 
@@ -161,7 +162,8 @@ export async function runAiTurn(
       await ctx.api.editMessageReplyMarkup(chatId, placeholder.message_id, {
         reply_markup: fallbackKeyboard
       }).catch(() => {});
-    });
+    })
+  );
 }
 
 export function registerMessages(bot: Bot<BotContext>) {
