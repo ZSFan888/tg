@@ -10,6 +10,7 @@ export interface Env {
   RATE_LIMIT_PER_MINUTE?: string;
   BOT_KV: KVNamespace;
   AI: Ai;
+  TAVILY_API_KEY?: string;
 }
 
 export type ChatRole = 'system' | 'user' | 'assistant';
@@ -35,6 +36,7 @@ export interface UserPreferences {
   persona: PersonaKey;
   customPrompt?: string;
   modelId?: string;
+  webSearchEnabled?: boolean;
   updatedAt: number;
 }
 

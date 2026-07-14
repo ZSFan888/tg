@@ -42,3 +42,12 @@ export async function setUserModel(env: Env, userId: number | string, modelId: s
   });
   return prefs;
 }
+
+export async function setWebSearchEnabled(env: Env, userId: number | string, enabled: boolean) {
+  const existing = await getUserPreferences(env, userId);
+  const prefs: UserPreferences = { ...existing, webSearchEnabled: enabled, updatedAt: Date.now() };
+  await env.BOT_KV.put(key(userId), JSON.stringify(prefs), {
+    expirationTtl: 60 * 60 * 24 * 90
+  });
+  return prefs;
+}

@@ -2,7 +2,7 @@ import { InlineKeyboard, InputFile } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences } from '../storage/preferences-store';
+import { getUserPreferences, setWebSearchEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
@@ -47,6 +47,7 @@ export function registerCommands(bot: Bot<BotContext>) {
       '/usage - 查看今日使用次数',
       '/clear - 清空当前会话上下文',
       '/export - 导出当前对话记录为文本文件',
+      '/websearch - 开启/关闭联网搜索',
       '/model - 查看并切换 AI 模型',
       '/ping - 健康检查'
     ];
@@ -119,6 +120,24 @@ export function registerCommands(bot: Bot<BotContext>) {
   bot.command('clear', async (ctx) => {
     await clearChatHistory(ctx.env, ctx.chat.id);
     await ctx.reply('已清空当前会话上下文。');
+  });
+
+  bot.command('websearch', async (ctx) => {
+    if (!ctx.from) return;
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const nextState = !prefs.webSearchEnabled;
+    await setWebSearchEnabled(ctx.env, ctx.from.id, nextState);
+
+    if (nextState && !ctx.env.TAVILY_API_KEY) {
+      await ctx.reply('联网搜索已开启，但管理员还没有配置搜索服务的密钥，暂时无法生效。');
+      return;
+    }
+
+    await ctx.reply(
+      nextState
+        ? '✅ 联网搜索已开启。之后每次提问，我会先搜索最新信息再回答。再发一次 /websearch 可以关闭。'
+        : '❌ 联网搜索已关闭，回到只用模型自身知识回答。'
+    );
   });
 
   bot.command('export', async (ctx) => {

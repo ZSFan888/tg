@@ -10,6 +10,7 @@ import { incrementUsage, incrementGlobalStats } from '../storage/usage-store';
 import { registerKnownUser } from '../storage/users-store';
 import { resolveSystemPrompt } from '../config/personas';
 import { isUserAllowed } from '../utils/access';
+import { searchWeb, buildSearchContext } from '../services/search';
 
 const EDIT_INTERVAL_MS = 1400;
 const TYPING_CURSOR = ' ▌';
@@ -49,13 +50,24 @@ export function registerMessages(bot: Bot<BotContext>) {
     await ctx.api.sendChatAction(ctx.chat.id, 'typing');
 
     const prefs = await getUserPreferences(ctx.env, ctx.from.id);
-    const { prompt } = resolveSystemPrompt(prefs);
+    const { prompt: basePrompt } = resolveSystemPrompt(prefs);
     const history = await getChatHistory(ctx.env, ctx.chat.id);
     const modelId = prefs.modelId ?? ctx.env.AI_MODEL;
 
-    const placeholder = await ctx.reply('思考中…', {
-      reply_parameters: { message_id: ctx.msg.message_id }
-    });
+    const placeholder = await ctx.reply(
+      prefs.webSearchEnabled && ctx.env.TAVILY_API_KEY ? '🔍 正在联网搜索…' : '思考中…',
+      { reply_parameters: { message_id: ctx.msg.message_id } }
+    );
+
+    let prompt = basePrompt;
+    if (prefs.webSearchEnabled && ctx.env.TAVILY_API_KEY) {
+      const searchOutcome = await searchWeb(ctx.env, text);
+      const searchContext = buildSearchContext(searchOutcome, text);
+      if (searchContext) {
+        prompt = `${basePrompt}\n\n${searchContext}`;
+      }
+      await ctx.api.editMessageText(ctx.chat.id, placeholder.message_id, '思考中…').catch(() => {});
+    }
 
     let lastEditedText = '';
     let lastEditAt = 0;
