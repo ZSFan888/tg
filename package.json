@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler pages dev public --compatibility-date=2026-07-14 --compatibility-flag=nodejs_compat",
+    "deploy": "wrangler pages deploy public --project-name=tg-cf-ai-bot",
     "cf-typegen": "wrangler types",
     "check": "tsc --noEmit"
   },

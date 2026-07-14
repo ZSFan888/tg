@@ -2,7 +2,7 @@
 
 一个纯私聊模式的 Telegram AI 机器人，基于 Cloudflare Workers + grammY + Workers AI 构建，支持流式回复、用户级人格设置、自定义提示词和使用量统计。
 
-本文档使用 **Fork + Connect to Git** 的方式部署，全程在浏览器里完成，不需要安装任何本地工具、不需要用命令行。跟着下面的步骤一步步做，大概 10 分钟能上线。
+本文档使用 **Fork + Cloudflare Pages** 的方式部署，全程在浏览器里完成，不需要安装任何本地工具、不需要用命令行。Pages 部署比 Workers 的"连接到 Git"更稳定，环境变量不会被自动清空。跟着下面的步骤一步步做，大概 10 分钟能上线。
 
 ---
 
@@ -38,70 +38,70 @@
 
 ---
 
-## 第 3 步：在 Cloudflare 创建 Worker 并连接你的 GitHub 仓库
+## 第 3 步：在 Cloudflare 用 Pages 部署，连接你的 GitHub 仓库
 
-不需要编辑任何代码文件、不需要手动填 KV ID，全部在界面上点选完成。
+改用 **Cloudflare Pages** 部署，比 Workers 的"连接到 Git"更简单，不会遇到变量被自动清空的问题，全程在界面上点选完成。
 
 1. 登录 [dash.cloudflare.com](https://dash.cloudflare.com)
 2. 左侧菜单点 **计算 (Workers) → Workers 和 Pages**
 3. 点击 **创建 (Create)**
-4. 选择 **连接到 Git (Connect to Git)**，不要选"克隆存储库 URL"或模板
+4. 选择 **Pages** 标签，再点击 **连接到 Git (Connect to Git)**
 5. 如果还没授权 GitHub，会跳转到 GitHub 走一次授权流程：
    - 选择 **Only select repositories**
    - 勾选你刚 fork 出来的仓库（`你的用户名/tg`）
    - 点击 **Install & Authorize**
-6. 授权完成后回到 Cloudflare，从列表里选中你 fork 的仓库，点击 **继续 (Continue)**
-7. 进入构建配置页面，确认这两项（通常会自动识别，不用改）：
-   - 构建命令：留空或 `npm install`
-   - 部署命令：`npx wrangler deploy`
-8. 点击下方的 **变量和机密 (Variables and Secrets)**，添加两个 Secret：
-   - 名称 `BOT_TOKEN`，值填第 1 步拿到的 Token
-   - 名称 `TELEGRAM_WEBHOOK_SECRET`，值随便填一段随机字符串（比如 `myBot2026SecretKey888`），自己记住，下面还要用一次
+6. 授权完成后回到 Cloudflare，从列表里选中你 fork 的仓库，点击 **开始设置 (Begin setup)**
+7. 在构建设置里填：
+   - 框架预设：**无 (None)**
+   - 构建命令：`npm install`
+   - 构建输出目录：`public`
+8. 点击 **环境变量 (Environment variables)**，添加以下变量（先不用管加密/普通，都填成一般文本即可，Pages 不会像 Workers 那样自动清空）：
+   - `BOT_TOKEN`：填第 1 步拿到的 Token
+   - `TELEGRAM_WEBHOOK_SECRET`：填一段随机字符串（比如 `myBot2026SecretKey888`），自己记住，下面还要用
 9. 点击 **保存并部署 (Save and Deploy)**
-
-第一次部署此时会成功，但因为还没绑定 KV，机器人的记忆和统计功能暂时不能用——下一步马上加上。
 
 ---
 
-## 第 4 步：创建 KV 数据库并直接绑定（不用填 ID）
+## 第 4 步：绑定 KV 和 Workers AI
 
-1. 部署完成后，进入这个 Worker 的详情页
-2. 点击顶部标签栏的 **绑定 (Bindings)**
-3. 点击 **添加绑定 (Add binding)**，类型选择 **KV 命名空间 (KV Namespace)**
-4. 绑定名称填 `BOT_KV`（必须完全一致）
-5. 在"选择 KV 命名空间"这一步，点击 **创建新的命名空间 (Create new)**，起个名字比如 `tg-bot-kv`，直接创建
-6. Cloudflare 会自动把这个新建的命名空间和 `BOT_KV` 绑定在一起，**全程不需要你复制粘贴任何 ID**
-7. 同一个页面，检查有没有一个类型是 **Workers AI** 的绑定，绑定名叫 `AI`；如果没有，同样点 **添加绑定** 手动加一个
-8. 保存后，回到 **部署 (Deployments)** 标签页，点击最新一次部署旁边的菜单，选择 **重新部署 (Retry deployment)** 或者直接推送一次代码改动触发新部署，让绑定生效
+Pages 项目的绑定需要在部署完成后单独添加：
+
+1. 部署完成后，进入这个 Pages 项目详情页
+2. 点击顶部标签栏的 **设置 (Settings) → 函数 (Functions)**
+3. 找到 **KV 命名空间绑定 (KV namespace bindings)**，点击 **添加绑定**：
+   - 变量名称填 `BOT_KV`
+   - 点击 **创建新的命名空间 (Create new)**，起个名字比如 `tg-bot-kv`，直接创建并绑定，不需要手动填任何 ID
+4. 同一个页面找到 **Workers AI 绑定**，点击 **添加绑定**：
+   - 变量名称填 `AI`
+5. 保存后，回到 **部署 (Deployments)** 标签页，点击最新一次部署旁边的菜单，选择 **重新部署 (Retry deployment)**，让新绑定生效
 
 ---
 
 ## 第 5 步：确认部署成功
 
-访问 Worker 网址，类似：
+访问 Pages 分配的网址，类似：
 
 ```
-https://tg-cf-ai-bot.你的子域名.workers.dev
+https://tg-cf-ai-bot.pages.dev
 ```
 
-如果看到类似这样的一段文字（JSON 格式），说明部署成功：
+如果看到一段返回文字（可能是占位页面或者 JSON），说明静态部分已经跑起来。真正验证 API 是否正常，访问：
 
-```json
-{"ok":true,"service":"tg-cf-ai-bot"}
+```
+https://tg-cf-ai-bot.pages.dev/healthz
 ```
 
-如果看到 **Error 1101**，回第 4 步检查：
-- `BOT_KV` 绑定是否已经创建并生效（绑定后是否重新部署了一次）
-- `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET` 是否已经在"变量和机密"里保存
-- `AI` 绑定（Workers AI 类型）是否存在
+看到类似 `{"ok":true,"now":...}` 就说明 Functions 和绑定都生效了。
 
-**把这个网址完整复制下来**，下一步注册 webhook 要用。
+如果访问报错，回第 4 步检查 `BOT_KV` 和 `AI` 绑定是否都已添加，以及是否重新部署过。
+
+**把这个 pages.dev 网址完整复制下来**，下一步注册 webhook 要用。
 
 ---
 
 ## 第 6 步：注册 Telegram Webhook
 
-这一步是告诉 Telegram "有新消息时，把消息推送到我的 Worker 地址"。
+这一步是告诉 Telegram "有新消息时，把消息推送到我的网址"。
 
 **方法一：用手机浏览器打开在线请求工具**（推荐，不需要电脑）
 
@@ -114,8 +114,8 @@ https://tg-cf-ai-bot.你的子域名.workers.dev
 4. Content 类型选 **JSON**，Body 填：
    ```json
    {
-     "url": "https://<你的Worker网址>/telegram/webhook",
-     "secret_token": "<你在第5步填的TELEGRAM_WEBHOOK_SECRET>"
+     "url": "https://<你的Pages网址>/telegram/webhook",
+     "secret_token": "<你在第3步填的TELEGRAM_WEBHOOK_SECRET>"
    }
    ```
 5. 点击 **Send**，看到返回 `{"ok":true,"result":true,"description":"Webhook was set"}` 就说明成功
@@ -126,7 +126,7 @@ https://tg-cf-ai-bot.你的子域名.workers.dev
 curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://<你的Worker网址>/telegram/webhook",
+    "url": "https://<你的Pages网址>/telegram/webhook",
     "secret_token": "<你的TELEGRAM_WEBHOOK_SECRET>"
   }'
 ```
@@ -143,7 +143,7 @@ curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
 
 ## 以后怎么更新代码
 
-因为用的是 Connect to Git 方式，以后你 fork 的仓库如果有新代码（比如同步了原仓库的更新），或者你自己改了代码并 push，Cloudflare 会**自动重新部署**，不需要手动操作。
+因为用的是 Pages Connect to Git 方式，以后你 fork 的仓库如果有新代码（比如同步了原仓库的更新），或者你自己改了代码并 push，Cloudflare 会**自动重新部署**，不需要手动操作。环境变量在 Pages 里不会像 Workers 那样被自动清空，改一次就一直生效。
 
 如果原仓库（`ZSFan888/tg`）后续有更新，想同步到你自己 fork 的仓库，在你 fork 的仓库页面点击 **Sync fork → Update branch** 即可，同步后 Cloudflare 会自动触发新的部署。
 
@@ -192,30 +192,21 @@ curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
 
 ## 常见问题排查
 
-**Worker 打开显示 Error 1101（Worker threw exception）**
+**访问 pages.dev 网址或 /healthz 报错**
 
-最常见的原因不是没填变量，而是**填了但被自动部署清空了**。Cloudflare 的"连接到 Git"机制默认每次部署都会用 `wrangler.jsonc` 覆盖所有配置，Secret 类的变量如果没写在配置文件里，会在下一次自动部署时被静默清空——哪怕你之前手动加过。
-
-本仓库的 `wrangler.jsonc` 已经加了 `"keep_vars": true` 这个开关，作用是告诉 Cloudflare"保留 Dashboard 里手动设置的变量，部署时不要覆盖它们"。如果你的 fork 是在这次更新之前创建的，需要同步一次最新代码：
-
-1. 打开你 fork 的仓库页面，点击 **Sync fork → Update branch**，同步最新的 `wrangler.jsonc`
-2. 同步后会自动触发一次新部署，等它跑完
-3. 重新去"变量和机密"页面，把 `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET` **再填一次**（这一次填完不会再被清空）
-4. 确认页面上显示"2 个已加密变量"而不是"无"
-
-其余检查项：
-- `BOT_KV` 绑定是否已经创建（在"绑定"页面添加 KV 命名空间绑定，绑定名必须是 `BOT_KV`）
-- Workers AI 绑定（名叫 `AI`）是否存在
+- 检查 **设置 → 环境变量**，确认 `BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_SECRET` 都已经填写并保存（Pages 的环境变量不会像 Workers 那样被自动部署清空，填一次就会一直保留）
+- 检查 **设置 → 函数（Functions）**，确认 `BOT_KV` 和 `AI` 两个绑定都已经添加
+- 改完变量或绑定后，一定要去 **部署（Deployments）** 页面手动点一次"重新部署"，新配置才会生效
 
 **机器人在 Telegram 里没有任何回复**
 
 - 访问 `https://api.telegram.org/bot<你的token>/getWebhookInfo`，看 `last_error_message` 字段有没有报错信息
-- 确认 webhook 的 url 填的是 `.../telegram/webhook`（结尾别漏了这段路径）
+- 确认 webhook 的 url 填的是 `.../telegram/webhook`（结尾别漏了这段路径），域名是 Pages 分配的 `.pages.dev` 地址
 - 确认 `secret_token` 和 Cloudflare 里配置的 `TELEGRAM_WEBHOOK_SECRET` 完全一致
 
 **"提取 GitHub 用户或组织详细信息时出错"**
 
-这是 Cloudflare 读取 GitHub 授权信息时的提示，通常不影响实际部署结果，可以先忽略，等部署完成看 Worker 网址是否正常访问再判断。如果部署确实失败，去 [github.com/settings/installations](https://github.com/settings/installations) 找到 Cloudflare Workers and Pages，重新确认一下仓库访问权限。
+这是 Cloudflare 读取 GitHub 授权信息时的提示，通常不影响实际部署结果，可以先忽略，等部署完成看 pages.dev 网址是否正常访问再判断。如果部署确实失败，去 [github.com/settings/installations](https://github.com/settings/installations) 找到 Cloudflare Workers and Pages，重新确认一下仓库访问权限。
 
 **收到"抱歉，你没有使用这个机器人的权限"**
 
