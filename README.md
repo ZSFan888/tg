@@ -141,6 +141,18 @@ curl -X POST "https://api.telegram.org/bot<你的BOT_TOKEN>/setWebhook" \
 
 ---
 
+## 第 8 步：注册机器人菜单栏（可选，但推荐）
+
+Telegram 输入框左下角有个"菜单"按钮，点开会显示命令列表——这个需要单独注册一次才会显示。用浏览器访问一次：
+
+```
+https://<你的Pages网址>/setup-menu?secret=<你的TELEGRAM_WEBHOOK_SECRET>
+```
+
+看到返回 `{"ok":true,"commands":[...]}` 就说明成功了。回到 Telegram 和机器人的对话框，点一下输入框左下角的菜单图标，应该就能看到所有命令和说明了。这一步只需要做一次，以后新增命令了再重新访问一次即可更新菜单。
+
+---
+
 ## 以后怎么更新代码
 
 因为用的是 Pages Connect to Git 方式，以后你 fork 的仓库如果有新代码（比如同步了原仓库的更新），或者你自己改了代码并 push，Cloudflare 会**自动重新部署**，不需要手动操作。环境变量在 Pages 里不会像 Workers 那样被自动清空，改一次就一直生效。
