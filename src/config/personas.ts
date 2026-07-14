@@ -1,4 +1,4 @@
-import type { PersonaKey } from '../types/env';
+import type { PersonaKey, UserPreferences } from '../types/env';
 
 export interface Persona {
   key: PersonaKey;
@@ -6,7 +6,7 @@ export interface Persona {
   prompt: string;
 }
 
-export const PERSONAS: Record<PersonaKey, Persona> = {
+export const PERSONAS: Record<Exclude<PersonaKey, 'custom'>, Persona> = {
   default: {
     key: 'default',
     label: '默认助手',
@@ -29,10 +29,14 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
   }
 };
 
-export function getPersona(key: PersonaKey): Persona {
-  return PERSONAS[key] ?? PERSONAS.default;
-}
-
 export function listPersonas(): Persona[] {
   return Object.values(PERSONAS);
+}
+
+export function resolveSystemPrompt(prefs: UserPreferences): { label: string; prompt: string } {
+  if (prefs.persona === 'custom' && prefs.customPrompt) {
+    return { label: '自定义模式', prompt: prefs.customPrompt };
+  }
+  const persona = PERSONAS[prefs.persona as Exclude<PersonaKey, 'custom'>] ?? PERSONAS.default;
+  return { label: persona.label, prompt: persona.prompt };
 }

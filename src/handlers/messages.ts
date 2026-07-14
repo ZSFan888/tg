@@ -4,15 +4,27 @@ import { generateReply } from '../services/ai';
 import { getChatHistory, saveChatHistory } from '../storage/chat-store';
 import { checkRateLimit } from '../storage/rate-limit';
 import { getUserPreferences } from '../storage/preferences-store';
-import { getPersona } from '../config/personas';
+import { getPendingAction, clearPendingAction } from '../storage/pending-store';
+import { setCustomPrompt } from '../storage/preferences-store';
+import { incrementUsage } from '../storage/usage-store';
+import { resolveSystemPrompt } from '../config/personas';
 import { isUserAllowed } from '../utils/access';
 
 export function registerMessages(bot: Bot<BotContext>) {
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text.trim();
     if (!text || text.startsWith('/')) return;
-    if (!isUserAllowed(ctx.env, ctx.from?.id)) {
+    if (!ctx.from) return;
+    if (!isUserAllowed(ctx.env, ctx.from.id)) {
       await ctx.reply('抱歉，你没有使用这个机器人的权限。');
+      return;
+    }
+
+    const pending = await getPendingAction(ctx.env, ctx.from.id);
+    if (pending?.action === 'awaiting_custom_prompt') {
+      await clearPendingAction(ctx.env, ctx.from.id);
+      await setCustomPrompt(ctx.env, ctx.from.id, text);
+      await ctx.reply('自定义提示词已保存，现在开始生效。使用 /settings 可以随时切回预设风格。');
       return;
     }
 
@@ -24,11 +36,11 @@ export function registerMessages(bot: Bot<BotContext>) {
 
     await ctx.api.sendChatAction(ctx.chat.id, 'typing');
 
-    const prefs = ctx.from ? await getUserPreferences(ctx.env, ctx.from.id) : { persona: 'default' as const };
-    const persona = getPersona(prefs.persona);
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const { prompt } = resolveSystemPrompt(prefs);
 
     const history = await getChatHistory(ctx.env, ctx.chat.id);
-    const reply = await generateReply(ctx.env, history, text, persona.prompt);
+    const reply = await generateReply(ctx.env, history, text, prompt);
 
     await ctx.reply(reply, {
       reply_parameters: {
@@ -41,5 +53,7 @@ export function registerMessages(bot: Bot<BotContext>) {
       { role: 'user', content: text },
       { role: 'assistant', content: reply }
     ]);
+
+    await incrementUsage(ctx.env, ctx.from.id);
   });
 }

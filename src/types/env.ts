@@ -28,9 +28,22 @@ export interface RateLimitState {
   resetAt: number;
 }
 
-export type PersonaKey = 'default' | 'concise' | 'professional' | 'humorous';
+export type PersonaKey = 'default' | 'concise' | 'professional' | 'humorous' | 'custom';
 
 export interface UserPreferences {
   persona: PersonaKey;
+  customPrompt?: string;
   updatedAt: number;
+}
+
+export interface UsageState {
+  date: string;
+  count: number;
+}
+
+export type PendingAction = 'awaiting_custom_prompt';
+
+export interface PendingState {
+  action: PendingAction;
+  createdAt: number;
 }

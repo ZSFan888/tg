@@ -12,7 +12,20 @@ export async function getUserPreferences(env: Env, userId: number | string): Pro
 }
 
 export async function setUserPersona(env: Env, userId: number | string, persona: PersonaKey) {
-  const prefs: UserPreferences = { persona, updatedAt: Date.now() };
+  const existing = await getUserPreferences(env, userId);
+  const prefs: UserPreferences = { ...existing, persona, updatedAt: Date.now() };
+  await env.BOT_KV.put(key(userId), JSON.stringify(prefs), {
+    expirationTtl: 60 * 60 * 24 * 90
+  });
+  return prefs;
+}
+
+export async function setCustomPrompt(env: Env, userId: number | string, customPrompt: string) {
+  const prefs: UserPreferences = {
+    persona: 'custom',
+    customPrompt,
+    updatedAt: Date.now()
+  };
   await env.BOT_KV.put(key(userId), JSON.stringify(prefs), {
     expirationTtl: 60 * 60 * 24 * 90
   });
