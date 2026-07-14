@@ -173,6 +173,7 @@ https://<你的Pages网址>/setup-menu?secret=<你的TELEGRAM_WEBHOOK_SECRET>
 - **限流保护**：防止刷爆免费额度
 - **Webhook 签名校验**：防止伪造请求
 - **管理员后台**：`/stats` 查看全局使用统计，`/broadcast` 一键群发通知
+- **对话导出**：`/export` 把当前上下文导出成 txt 文件
 
 ---
 
@@ -206,6 +207,7 @@ https://<你的Pages网址>/setup-menu?secret=<你的TELEGRAM_WEBHOOK_SECRET>
 | `/setprompt` | 设置自定义系统提示词 |
 | `/usage` | 查看今日使用次数 |
 | `/clear` | 清空当前会话上下文 |
+| `/export` | 导出当前对话记录为文本文件 |
 | `/model` | 查看并切换 AI 模型 |
 | `/ping` | 健康检查 |
 

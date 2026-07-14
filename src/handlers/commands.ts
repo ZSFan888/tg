@@ -1,7 +1,7 @@
-import { InlineKeyboard } from 'grammy';
+import { InlineKeyboard, InputFile } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
-import { clearChatHistory } from '../storage/chat-store';
+import { clearChatHistory, getChatHistory } from '../storage/chat-store';
 import { getUserPreferences } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
@@ -46,6 +46,7 @@ export function registerCommands(bot: Bot<BotContext>) {
       '/setprompt - 设置自定义系统提示词',
       '/usage - 查看今日使用次数',
       '/clear - 清空当前会话上下文',
+      '/export - 导出当前对话记录为文本文件',
       '/model - 查看并切换 AI 模型',
       '/ping - 健康检查'
     ];
@@ -118,6 +119,27 @@ export function registerCommands(bot: Bot<BotContext>) {
   bot.command('clear', async (ctx) => {
     await clearChatHistory(ctx.env, ctx.chat.id);
     await ctx.reply('已清空当前会话上下文。');
+  });
+
+  bot.command('export', async (ctx) => {
+    const history = await getChatHistory(ctx.env, ctx.chat.id);
+    if (history.length === 0) {
+      await ctx.reply('当前没有可导出的对话记录。');
+      return;
+    }
+
+    const lines = history.map((msg) => {
+      const speaker = msg.role === 'user' ? '我' : 'AI';
+      return `[${speaker}] ${msg.content}`;
+    });
+
+    const text = lines.join('\n\n');
+    const bytes = new TextEncoder().encode(text);
+    const filename = `chat-export-${new Date().toISOString().slice(0, 10)}.txt`;
+
+    await ctx.replyWithDocument(new InputFile(bytes, filename), {
+      caption: `对话记录导出，共 ${history.length} 条消息。`
+    });
   });
 
   bot.command('stats', async (ctx) => {
