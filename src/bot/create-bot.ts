@@ -3,7 +3,7 @@ import type { Env } from '../types/env';
 import type { BotContext } from './context';
 import { registerCommands } from '../handlers/commands';
 import { registerCallbacks } from '../handlers/callbacks';
-import { registerMessages } from '../handlers/messages';
+import { registerMessages } from '../handlers/message';
 
 export function createBot(env: Env) {
   const bot = new Bot<BotContext>(env.BOT_TOKEN);
