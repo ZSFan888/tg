@@ -7,9 +7,23 @@ import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
 import { MODELS, getModelById } from '../config/models';
+import { registerKnownUser } from '../storage/users-store';
+import { isAdmin } from '../utils/access';
+import { getAllKnownUsers } from '../storage/users-store';
+import { getGlobalStats } from '../storage/usage-store';
 
 export function registerCommands(bot: Bot<BotContext>) {
   bot.command('start', async (ctx) => {
+    if (ctx.from) {
+      await registerKnownUser(
+        ctx.env,
+        ctx.from.id,
+        ctx.chat.id,
+        ctx.from.username,
+        ctx.from.first_name
+      );
+    }
+
     const keyboard = new InlineKeyboard()
       .text('开始聊天', 'menu:chat')
       .text('偏好设置', 'menu:settings')
@@ -24,7 +38,7 @@ export function registerCommands(bot: Bot<BotContext>) {
   });
 
   bot.command('help', async (ctx) => {
-    await ctx.reply([
+    const lines = [
       '可用命令：',
       '/start - 打开欢迎菜单',
       '/chat - 提示进入聊天模式',
@@ -34,7 +48,13 @@ export function registerCommands(bot: Bot<BotContext>) {
       '/clear - 清空当前会话上下文',
       '/model - 查看并切换 AI 模型',
       '/ping - 健康检查'
-    ].join('\n'));
+    ];
+
+    if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
+      lines.push('', '管理员专用：', '/stats - 查看全局使用统计', '/broadcast <内容> - 群发通知给所有已知用户');
+    }
+
+    await ctx.reply(lines.join('\n'));
   });
 
   bot.command('chat', async (ctx) => {
@@ -98,5 +118,66 @@ export function registerCommands(bot: Bot<BotContext>) {
   bot.command('clear', async (ctx) => {
     await clearChatHistory(ctx.env, ctx.chat.id);
     await ctx.reply('已清空当前会话上下文。');
+  });
+
+  bot.command('stats', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.reply('这个命令仅管理员可用。');
+      return;
+    }
+
+    const [users, global] = await Promise.all([
+      getAllKnownUsers(ctx.env),
+      getGlobalStats(ctx.env)
+    ]);
+
+    const now = Date.now();
+    const activeToday = users.filter((u) => now - u.lastSeenAt < 24 * 60 * 60 * 1000).length;
+    const activeWeek = users.filter((u) => now - u.lastSeenAt < 7 * 24 * 60 * 60 * 1000).length;
+
+    await ctx.reply([
+      '📊 全局使用统计',
+      '',
+      `累计用户数：${users.length}`,
+      `今日活跃用户：${activeToday}`,
+      `近 7 天活跃用户：${activeWeek}`,
+      `今日消息总数：${global.messageCount}`
+    ].join('\n'));
+  });
+
+  bot.command('broadcast', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.reply('这个命令仅管理员可用。');
+      return;
+    }
+
+    const content = ctx.match?.trim();
+    if (!content) {
+      await ctx.reply('用法：/broadcast 你要群发的内容\n例如：/broadcast 机器人今晚维护 30 分钟');
+      return;
+    }
+
+    const users = await getAllKnownUsers(ctx.env);
+    if (users.length === 0) {
+      await ctx.reply('目前没有任何已知用户，无法群发。');
+      return;
+    }
+
+    await ctx.reply(`开始群发，目标用户数：${users.length}，请稍候...`);
+
+    let success = 0;
+    let failed = 0;
+
+    for (const user of users) {
+      try {
+        await ctx.api.sendMessage(user.chatId, `📢 系统通知\n\n${content}`);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    }
+
+    await ctx.reply(`群发完成。成功：${success}，失败：${failed}`);
   });
 }

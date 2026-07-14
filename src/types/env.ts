@@ -3,6 +3,7 @@ export interface Env {
   TELEGRAM_WEBHOOK_SECRET: string;
   BOT_WEBHOOK_PATH: string;
   ALLOWED_USER_IDS?: string;
+  ADMIN_USER_IDS?: string;
   AI_MODEL: string;
   SYSTEM_PROMPT: string;
   MAX_HISTORY?: string;
@@ -40,6 +41,20 @@ export interface UserPreferences {
 export interface UsageState {
   date: string;
   count: number;
+}
+
+export interface KnownUser {
+  userId: number;
+  chatId: number;
+  username?: string;
+  firstName?: string;
+  firstSeenAt: number;
+  lastSeenAt: number;
+}
+
+export interface GlobalDailyStats {
+  date: string;
+  messageCount: number;
 }
 
 export type PendingAction = 'awaiting_custom_prompt';

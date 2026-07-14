@@ -16,3 +16,9 @@ export function isUserAllowed(env: Env, userId?: number): boolean {
   if (allowed.length === 0) return true;
   return allowed.includes(userId);
 }
+
+export function isAdmin(env: Env, userId?: number): boolean {
+  if (!userId) return false;
+  const admins = parseCsvNumbers(env.ADMIN_USER_IDS);
+  return admins.includes(userId);
+}

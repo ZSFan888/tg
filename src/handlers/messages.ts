@@ -6,7 +6,8 @@ import { checkRateLimit } from '../storage/rate-limit';
 import { getUserPreferences } from '../storage/preferences-store';
 import { getPendingAction, clearPendingAction } from '../storage/pending-store';
 import { setCustomPrompt } from '../storage/preferences-store';
-import { incrementUsage } from '../storage/usage-store';
+import { incrementUsage, incrementGlobalStats } from '../storage/usage-store';
+import { registerKnownUser } from '../storage/users-store';
 import { resolveSystemPrompt } from '../config/personas';
 import { isUserAllowed } from '../utils/access';
 
@@ -22,6 +23,14 @@ export function registerMessages(bot: Bot<BotContext>) {
       await ctx.reply('抱歉，你没有使用这个机器人的权限。');
       return;
     }
+
+    await registerKnownUser(
+      ctx.env,
+      ctx.from.id,
+      ctx.chat.id,
+      ctx.from.username,
+      ctx.from.first_name
+    );
 
     const pending = await getPendingAction(ctx.env, ctx.from.id);
     if (pending?.action === 'awaiting_custom_prompt') {
@@ -93,5 +102,6 @@ export function registerMessages(bot: Bot<BotContext>) {
     ]);
 
     await incrementUsage(ctx.env, ctx.from.id);
+    await incrementGlobalStats(ctx.env);
   });
 }
