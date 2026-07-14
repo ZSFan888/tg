@@ -7,6 +7,12 @@
   "ai": {
     "binding": "AI"
   },
+  "kv_namespaces": [
+    {
+      "binding": "BOT_KV",
+      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+    }
+  ],
   "vars": {
     "BOT_WEBHOOK_PATH": "/telegram/webhook",
     "ALLOWED_USER_IDS": "all",
