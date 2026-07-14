@@ -69,7 +69,7 @@ export async function generateReply(
   ]);
 
   try {
-    const result = await env.AI.run(modelId ?? env.AI_MODEL, { messages });
+    const result = await env.AI.run(modelId ?? env.AI_MODEL, { messages, max_tokens: 2048 });
     const output = readResponse(result).trim();
     const text = output || '我现在有点忙，请你换个问法再试一次。';
     const usage = readUsage(result) ?? {
@@ -128,7 +128,7 @@ export async function generateReplyStream(
   ]);
 
   try {
-    const result = await env.AI.run(modelId ?? env.AI_MODEL, { messages, stream: true });
+    const result = await env.AI.run(modelId ?? env.AI_MODEL, { messages, stream: true, max_tokens: 2048 });
 
     if (!(result instanceof ReadableStream)) {
       const fallback = readResponse(result).trim() || '我现在有点忙，请你换个问法再试一次。';
