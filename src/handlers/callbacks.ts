@@ -9,6 +9,8 @@ import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
 import { getModelByKey } from '../config/models';
 import { getFollowUps } from '../storage/followup-store';
+import { getMessageRecord } from '../storage/message-record-store';
+import { addFavorite, removeFavorite } from '../storage/favorites-store';
 import { runAiTurn } from './messages';
 
 export function registerCallbacks(bot: Bot<BotContext>) {
@@ -122,6 +124,32 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
   bot.callbackQuery('noop', async (ctx) => {
     await ctx.answerCallbackQuery({ text: '追问生成中，请稍候…' });
+  });
+
+  bot.callbackQuery(/^favorite:(\d+)$/, async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
+    const messageId = Number(ctx.match?.[1]);
+
+    const record = await getMessageRecord(ctx.env, ctx.chat.id, messageId);
+    if (!record) {
+      await ctx.answerCallbackQuery({ text: '这条消息已经太久了，无法收藏' });
+      return;
+    }
+
+    await addFavorite(ctx.env, ctx.from.id, record.question, record.answer);
+    await ctx.answerCallbackQuery({ text: '已收藏，使用 /favorites 查看' });
+  });
+
+  bot.callbackQuery(/^unfavorite:(.+)$/, async (ctx) => {
+    if (!ctx.from) return;
+    const id = ctx.match?.[1] ?? '';
+
+    const removed = await removeFavorite(ctx.env, ctx.from.id, id);
+    await ctx.answerCallbackQuery({ text: removed ? '已移除收藏' : '找不到这条收藏' });
+
+    if (removed) {
+      await ctx.editMessageText('（已从收藏中移除）').catch(() => {});
+    }
   });
 
   bot.callbackQuery(/^followup:(\d+):(\d+)$/, async (ctx) => {

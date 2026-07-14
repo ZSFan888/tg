@@ -12,6 +12,7 @@ import { incrementUsage, incrementGlobalStats, incrementModelUsage } from '../st
 import { registerKnownUser } from '../storage/users-store';
 import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
+import { saveMessageRecord } from '../storage/message-record-store';
 import { resolveSystemPrompt } from '../config/personas';
 import { searchWeb, buildSearchContext } from '../services/search';
 import type { ChatMessage } from '../types/env';
@@ -115,6 +116,7 @@ export async function runAiTurn(
 
   const keyboard = new InlineKeyboard()
     .text('› 重新生成', 'regen:last')
+    .text('☆ 收藏', `favorite:${placeholder.message_id}`)
     .row()
     .text('· 追问生成中…', 'noop');
   try {
@@ -124,6 +126,11 @@ export async function runAiTurn(
   } catch {
     // ignore if message content changed concurrently
   }
+
+  await saveMessageRecord(ctx.env, chatId, placeholder.message_id, {
+    question: text,
+    answer: finalText
+  });
 
   await saveChatHistory(ctx.env, chatId, [
     ...history,
@@ -137,7 +144,9 @@ export async function runAiTurn(
 
   generateFollowUps(ctx.env, text, finalText, modelId)
     .then(async (questions) => {
-      const followKeyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
+      const followKeyboard = new InlineKeyboard()
+        .text('› 重新生成', 'regen:last')
+        .text('☆ 收藏', `favorite:${placeholder.message_id}`);
 
       if (questions.length === 0) {
         await ctx.api.editMessageReplyMarkup(chatId, placeholder.message_id, {
@@ -157,7 +166,9 @@ export async function runAiTurn(
       }).catch(() => {});
     })
     .catch(async () => {
-      const fallbackKeyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
+      const fallbackKeyboard = new InlineKeyboard()
+        .text('› 重新生成', 'regen:last')
+        .text('☆ 收藏', `favorite:${placeholder.message_id}`);
       await ctx.api.editMessageReplyMarkup(chatId, placeholder.message_id, {
         reply_markup: fallbackKeyboard
       }).catch(() => {});
