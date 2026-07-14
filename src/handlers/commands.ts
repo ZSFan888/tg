@@ -13,7 +13,6 @@ import { getAllKnownUsers } from '../storage/users-store';
 import { getGlobalStats, getStatsHistory, getModelStats } from '../storage/usage-store';
 import { banUser, unbanUser } from '../storage/ban-store';
 import { buildUsageChartUrl } from '../services/chart';
-import { getFavorites } from '../storage/favorites-store';
 
 export function registerCommands(bot: Bot<BotContext>) {
   bot.command('start', async (ctx) => {
@@ -50,7 +49,6 @@ export function registerCommands(bot: Bot<BotContext>) {
       '/usage - 查看今日使用次数',
       '/clear - 清空当前会话上下文',
       '/export - 导出当前对话记录为文本文件',
-      '/favorites - 查看收藏的回答',
       '/websearch - 开启/关闭联网搜索',
       '/model - 查看并切换 AI 模型',
       '/ping - 健康检查'
@@ -163,30 +161,6 @@ export function registerCommands(bot: Bot<BotContext>) {
     await ctx.replyWithDocument(new InputFile(bytes, filename), {
       caption: `对话记录导出，共 ${history.length} 条消息。`
     });
-  });
-
-  bot.command('favorites', async (ctx) => {
-    if (!ctx.from) return;
-
-    const favorites = await getFavorites(ctx.env, ctx.from.id);
-    if (favorites.length === 0) {
-      await ctx.reply('你还没有收藏任何回答。在 AI 回复下方点击"☆ 收藏"按钮即可保存。');
-      return;
-    }
-
-    await ctx.reply(`你一共收藏了 ${favorites.length} 条回答：`);
-
-    for (const fav of favorites.slice(0, 10)) {
-      const question = fav.question.length > 60 ? `${fav.question.slice(0, 60)}…` : fav.question;
-      const answer = fav.answer.length > 500 ? `${fav.answer.slice(0, 500)}…` : fav.answer;
-      const keyboard = new InlineKeyboard().text('🗑 移除', `unfavorite:${fav.id}`);
-
-      await ctx.reply(`Q: ${question}\n\nA: ${answer}`, { reply_markup: keyboard });
-    }
-
-    if (favorites.length > 10) {
-      await ctx.reply(`还有 ${favorites.length - 10} 条收藏未显示，最多保留最近 50 条。`);
-    }
   });
 
   bot.command('stats', async (ctx) => {

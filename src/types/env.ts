@@ -77,10 +77,3 @@ export interface PendingState {
   action: PendingAction;
   createdAt: number;
 }
-
-export interface FavoriteEntry {
-  id: string;
-  question: string;
-  answer: string;
-  savedAt: number;
-}
