@@ -16,6 +16,12 @@ import { getGlobalStats, getStatsHistory, getModelStats, getUsage } from '../sto
 import { clearChatHistory } from '../storage/chat-store';
 import { getBanRecord, banUser, unbanUser } from '../storage/ban-store';
 import { MODELS } from '../config/models';
+import {
+  getTodayNeuronUsage,
+  getNeuronUsageHistory,
+  projectDepletionHour,
+  DAILY_FREE_NEURONS_CONST
+} from '../storage/neurons-store';
 
 const SESSION_COOKIE = 'admin_session';
 
@@ -189,6 +195,32 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
       getModelStats(env)
     ]);
     return c.json({ ok: true, history, modelStats });
+  });
+
+  app.get('/api/admin/neurons', async (c) => {
+    const env = await resolveEnv(c.env);
+    const [today, history] = await Promise.all([
+      getTodayNeuronUsage(env),
+      getNeuronUsageHistory(env, 7)
+    ]);
+
+    const used = Math.round(today.total);
+    const percent = Math.min(100, Math.round((used / DAILY_FREE_NEURONS_CONST) * 100));
+    const remaining = Math.max(0, DAILY_FREE_NEURONS_CONST - used);
+    const projection = projectDepletionHour(used);
+
+    return c.json({
+      ok: true,
+      dailyFreeAllocation: DAILY_FREE_NEURONS_CONST,
+      usedToday: used,
+      remainingToday: remaining,
+      percentUsed: percent,
+      chatCallsToday: today.chatCalls,
+      audioCallsToday: today.audioCalls,
+      willExhaustToday: projection.willExhaustToday,
+      estimatedExhaustionHourUtc: projection.estimatedExhaustionHourUtc,
+      history: history.map((h) => ({ date: h.date, total: Math.round(h.total) }))
+    });
   });
 
   app.get('/api/admin/users', async (c) => {

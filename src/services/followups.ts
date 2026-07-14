@@ -1,4 +1,5 @@
 import type { ChatMessage, Env } from '../types/env';
+import { recordNeuronUsage, estimateChatNeurons } from '../storage/neurons-store';
 
 export async function generateFollowUps(
   env: Env,
@@ -24,6 +25,11 @@ AI 回答：${aiAnswer.slice(0, 800)}`;
     const text = typeof result === 'object' && result && 'response' in result
       ? String((result as { response: unknown }).response ?? '')
       : String(result ?? '');
+
+    const usageObj = (result as { usage?: { prompt_tokens?: number; completion_tokens?: number } })?.usage;
+    const promptTokens = usageObj?.prompt_tokens ?? Math.ceil(prompt.length / 2.5);
+    const completionTokens = usageObj?.completion_tokens ?? Math.ceil(text.length / 2.5);
+    await recordNeuronUsage(env, estimateChatNeurons(modelId ?? env.AI_MODEL, promptTokens, completionTokens), 'chat');
 
     const lines = text
       .split('\n')

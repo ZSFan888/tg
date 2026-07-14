@@ -13,6 +13,12 @@ import { getAllKnownUsers } from '../storage/users-store';
 import { getGlobalStats, getStatsHistory, getModelStats } from '../storage/usage-store';
 import { banUser, unbanUser } from '../storage/ban-store';
 import { buildUsageChartUrl } from '../services/chart';
+import {
+  getTodayNeuronUsage,
+  getNeuronUsageHistory,
+  projectDepletionHour,
+  DAILY_FREE_NEURONS_CONST
+} from '../storage/neurons-store';
 
 export function registerCommands(bot: Bot<BotContext>) {
   bot.command('start', async (ctx) => {
@@ -55,7 +61,7 @@ export function registerCommands(bot: Bot<BotContext>) {
     ];
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
-      lines.push('', '管理员专用：', '/stats - 查看全局使用统计（含趋势图）', '/broadcast <内容> - 群发通知给所有已知用户', '/ban <用户ID> [分钟数] [原因] - 禁用用户', '/unban <用户ID> - 解除禁用');
+      lines.push('', '管理员专用：', '/stats - 查看全局使用统计（含趋势图）', '/neurons - 查看今日 Neurons 用量预估', '/broadcast <内容> - 群发通知给所有已知用户', '/ban <用户ID> [分钟数] [原因] - 禁用用户', '/unban <用户ID> - 解除禁用');
     }
 
     await ctx.reply(lines.join('\n'));
@@ -117,6 +123,59 @@ export function registerCommands(bot: Bot<BotContext>) {
 
   bot.command('ping', async (ctx) => {
     await ctx.reply('pong');
+  });
+
+  bot.command('neurons', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.env, ctx.from.id)) {
+      await ctx.reply('这个命令仅管理员可用。');
+      return;
+    }
+
+    const [today, history] = await Promise.all([
+      getTodayNeuronUsage(ctx.env),
+      getNeuronUsageHistory(ctx.env, 7)
+    ]);
+
+    const used = Math.round(today.total);
+    const percent = Math.min(100, Math.round((used / DAILY_FREE_NEURONS_CONST) * 100));
+    const remaining = Math.max(0, DAILY_FREE_NEURONS_CONST - used);
+
+    const barLength = 20;
+    const filled = Math.round((percent / 100) * barLength);
+    const bar = '█'.repeat(filled) + '░'.repeat(barLength - filled);
+
+    const projection = projectDepletionHour(used);
+
+    const lines = [
+      '» 今日 Neurons 使用预估',
+      '',
+      `${bar} ${percent}%`,
+      `已用：约 ${used} / ${DAILY_FREE_NEURONS_CONST}（免费额度）`,
+      `剩余：约 ${remaining}`,
+      `今日调用：文字 ${today.chatCalls} 次，语音 ${today.audioCalls} 次`,
+      ''
+    ];
+
+    if (projection.willExhaustToday && projection.estimatedExhaustionHourUtc !== null) {
+      const hour = Math.floor(projection.estimatedExhaustionHourUtc);
+      const minute = Math.round((projection.estimatedExhaustionHourUtc - hour) * 60);
+      lines.push(`⚠ 按当前速度预计将在 UTC ${hour}:${String(minute).padStart(2, '0')} 左右用完今日免费额度`);
+    } else if (percent >= 80) {
+      lines.push('⚠ 今日额度消耗已超过 80%，请注意使用频率');
+    } else {
+      lines.push('· 按当前速度，今日额度预计够用');
+    }
+
+    lines.push('', '注：此数据为估算值，基于各模型官方 Token 单价换算，可能与 Cloudflare 后台精确计费略有差异。');
+
+    if (history.filter((h) => h.total > 0).length >= 2) {
+      const historyLines = history
+        .filter((h) => h.total > 0)
+        .map((h) => `  ${h.date}：约 ${Math.round(h.total)} neurons`);
+      lines.push('', '近期每日消耗：', ...historyLines);
+    }
+
+    await ctx.reply(lines.join('\n'));
   });
 
   bot.command('clear', async (ctx) => {

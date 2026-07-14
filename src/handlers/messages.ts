@@ -16,6 +16,7 @@ import { sanitizeMarkdown } from '../utils/markdown';
 import { transcribeAudio } from '../services/transcribe';
 import { resolveSystemPrompt } from '../config/personas';
 import { searchWeb, buildSearchContext } from '../services/search';
+import { recordNeuronUsage, estimateChatNeurons, WHISPER_NEURONS_PER_MINUTE } from '../storage/neurons-store';
 import type { ChatMessage } from '../types/env';
 
 const EDIT_INTERVAL_MS = 1400;
@@ -113,7 +114,7 @@ export async function runAiTurn(
     }
   }
 
-  const finalText = await generateReplyStream(ctx.env, history, text, prompt, {
+  const { text: finalText, usage: chatUsage } = await generateReplyStream(ctx.env, history, text, prompt, {
     onChunk: async (fullTextSoFar) => {
       if (placeholderActive) {
         placeholderActive = false;
@@ -162,7 +163,8 @@ export async function runAiTurn(
     ]),
     incrementUsage(ctx.env, userId),
     incrementGlobalStats(ctx.env),
-    incrementModelUsage(ctx.env, modelId)
+    incrementModelUsage(ctx.env, modelId),
+    recordNeuronUsage(ctx.env, estimateChatNeurons(modelId, chatUsage.promptTokens, chatUsage.completionTokens), 'chat')
   ]);
 
   ctx.waitUntil(
@@ -301,6 +303,11 @@ export function registerMessages(bot: Bot<BotContext>) {
         statusMsg.message_id,
         `· 识别结果：${transcription.text}`
       );
+
+      const durationSeconds = ctx.message?.voice?.duration ?? ctx.message?.audio?.duration ?? 0;
+      if (durationSeconds > 0) {
+        await recordNeuronUsage(ctx.env, (durationSeconds / 60) * WHISPER_NEURONS_PER_MINUTE, 'audio');
+      }
 
       await runAiTurn(ctx, ctx.chat.id, ctx.from.id, transcription.text, ctx.message!.message_id);
     } catch (err) {

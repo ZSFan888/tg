@@ -134,6 +134,82 @@ body {
 .section-title { font-size: 15px; font-weight: 600; margin: 28px 0 12px; }
 .section-title:first-child { margin-top: 0; }
 
+.neurons-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.neurons-card .head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.neurons-card .head-row .title { font-size: 15px; font-weight: 600; }
+.neurons-card .head-row .percent { font-size: 22px; font-weight: 700; }
+.neurons-bar-track {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.neurons-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  transition: width 0.4s ease;
+}
+.neurons-bar-fill.warn { background: linear-gradient(90deg, var(--warning), #f0c761); }
+.neurons-bar-fill.danger { background: linear-gradient(90deg, var(--error), #e8848d); }
+.neurons-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.neurons-meta .item { font-size: 12px; color: var(--text-muted); }
+.neurons-meta .item b { display: block; font-size: 15px; color: var(--text); font-weight: 600; margin-top: 2px; }
+.neurons-warning {
+  font-size: 12px;
+  color: var(--warning);
+  background: rgba(232,175,52,0.1);
+  border: 1px solid rgba(232,175,52,0.25);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-top: 6px;
+}
+.neurons-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 10px;
+}
+.sparkline-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 40px;
+  margin-top: 14px;
+}
+.sparkline-bar {
+  flex: 1;
+  background: var(--primary);
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  opacity: 0.75;
+}
+.sparkline-labels {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.sparkline-labels span { flex: 1; text-align: center; font-size: 10px; color: var(--text-muted); }
+
 .setting-row {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -352,19 +428,21 @@ function renderLogin(app) {
   pwInput.focus();
 }
 
-let dashData = { status: null, stats: null, users: [], settings: null };
+let dashData = { status: null, stats: null, users: [], settings: null, neurons: null };
 
 async function loadDashboardData() {
-  const [status, stats, users, settings] = await Promise.all([
+  const [status, stats, users, settings, neurons] = await Promise.all([
     api('/api/admin/status').catch(() => null),
     api('/api/admin/stats').catch(() => null),
     api('/api/admin/users').catch(() => ({ users: [] })),
-    api('/api/admin/settings').catch(() => null)
+    api('/api/admin/settings').catch(() => null),
+    api('/api/admin/neurons').catch(() => null)
   ]);
   dashData.status = status;
   dashData.stats = stats;
   dashData.users = users.users || [];
   dashData.settings = settings;
+  dashData.neurons = neurons;
 }
 
 let autoRefreshTimer = null;
@@ -467,6 +545,62 @@ function applyTab() {
   $$('.tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === state.activeTab));
 }
 
+function renderNeuronsCardHtml() {
+  const n = dashData.neurons;
+  if (!n) {
+    return '<div class="neurons-card"><div class="empty-hint">Neurons 用量数据加载失败</div></div>';
+  }
+
+  const percent = Math.max(0, Math.min(100, n.percentUsed));
+  const barClass = percent >= 90 ? 'danger' : percent >= 70 ? 'warn' : '';
+
+  let warningHtml = '';
+  if (n.willExhaustToday && n.estimatedExhaustionHourUtc != null) {
+    const hour = Math.floor(n.estimatedExhaustionHourUtc);
+    const minute = Math.round((n.estimatedExhaustionHourUtc - hour) * 60);
+    warningHtml = `<div class="neurons-warning">⚠ 按当前消耗速度，预计将在 UTC ${hour}:${String(minute).padStart(2, '0')} 左右用完今日免费额度</div>`;
+  } else if (percent >= 80) {
+    warningHtml = '<div class="neurons-warning">⚠ 今日额度消耗已超过 80%，请注意使用频率</div>';
+  }
+
+  const history = (n.history || []).filter((h) => h.total > 0);
+  let sparklineHtml = '';
+  if (history.length >= 2) {
+    const max = Math.max(...history.map((h) => h.total), 1);
+    const bars = history
+      .map((h) => `<div class="sparkline-bar" style="height:${Math.max(4, Math.round((h.total / max) * 40))}px" title="${h.date}: ${h.total}"></div>`)
+      .join('');
+    const labels = history
+      .map((h) => `<span>${h.date.slice(5)}</span>`)
+      .join('');
+    sparklineHtml = `
+      <div class="sparkline-row">${bars}</div>
+      <div class="sparkline-labels">${labels}</div>
+    `;
+  }
+
+  return `
+    <div class="neurons-card">
+      <div class="head-row">
+        <span class="title">今日 Neurons 用量预估</span>
+        <span class="percent">${percent}%</span>
+      </div>
+      <div class="neurons-bar-track">
+        <div class="neurons-bar-fill ${barClass}" style="width:${percent}%"></div>
+      </div>
+      <div class="neurons-meta">
+        <div class="item">已用<b>${n.usedToday} / ${n.dailyFreeAllocation}</b></div>
+        <div class="item">剩余<b>${n.remainingToday}</b></div>
+        <div class="item">文字调用<b>${n.chatCallsToday} 次</b></div>
+        <div class="item">语音调用<b>${n.audioCallsToday} 次</b></div>
+      </div>
+      ${warningHtml}
+      ${sparklineHtml}
+      <div class="neurons-note">注：估算值，基于 Cloudflare 官方各模型 Token 单价换算，可能与后台精确计费略有差异。</div>
+    </div>
+  `;
+}
+
 function renderStatusPanel() {
   const panel = $('[data-panel="status"]');
   const s = dashData.status;
@@ -479,6 +613,7 @@ function renderStatusPanel() {
   }
 
   panel.innerHTML = `
+    ${renderNeuronsCardHtml()}
     <div class="grid-cards">
       <div class="card">
         <div class="label">Webhook 状态</div>
