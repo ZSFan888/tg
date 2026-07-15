@@ -438,6 +438,12 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     }
 
     await ctx.answerCallbackQuery();
-    await runAiTurn(ctx, ctx.chat.id, ctx.from.id, question, undefined);
+
+    // 先把追问的问题当作一条“用户发出的消息”发出来，
+    // 而不是直接把答案怼出来，这样看起来跟自己手动打字问的一样，
+    // 也方便回头翻聊天记录时能看清问的是什么。
+    const questionMsg = await ctx.api.sendMessage(ctx.chat.id, question);
+
+    await runAiTurn(ctx, ctx.chat.id, ctx.from.id, question, questionMsg.message_id);
   });
 }
