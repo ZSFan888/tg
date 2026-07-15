@@ -232,8 +232,6 @@ export async function runAiTurn(
       streamDone = true;
       clearInterval(revealInterval);
       if (stallTimer) clearInterval(stallTimer);
-      if (stallTimer) clearInterval(stallTimer);
-      if (stallTimer) clearInterval(stallTimer);
       revealedLength = targetText.length;
       await sendFinalText(sanitizeMarkdown(targetText));
     },
