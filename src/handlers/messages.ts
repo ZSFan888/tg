@@ -302,7 +302,16 @@ async function runVoiceModeTurn(
   text: string,
   replyToMessageId: number | undefined
 ) {
-  const summaryPlaceholder = await ctx.reply('· 正在准备语音回复…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const summaryPlaceholder = await ctx.reply('· 正在组织语音回复…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+
+  const placeholderFrames = ['· 正在组织语音回复', '· 正在生成朗读文本', '· 正在合成语音', '· 正在发送语音'];
+  let placeholderIndex = 0;
+  let placeholderActive = true;
+  const placeholderInterval = setInterval(() => {
+    if (!placeholderActive) return;
+    placeholderIndex = (placeholderIndex + 1) % placeholderFrames.length;
+    ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, `${placeholderFrames[placeholderIndex]}…`).catch(() => {});
+  }, 1200);
 
   const [prefs, historyFromStore] = await Promise.all([
     getUserPreferences(ctx.env, userId),
@@ -313,14 +322,17 @@ async function runVoiceModeTurn(
 
 当前是语音模式。请使用简短、自然、口语化、适合直接朗读的中文回答。优先 1 到 3 句，总长度尽量控制在 80 个中文字符以内，不要使用复杂列表，不要写长段落，不要加标题。直接回答用户问题，不要展示你的思考过程，不要分析需求，不要分步骤解释。`;
 
-  const { text: finalTextRaw, usage } = await generateReplyStream(ctx.env, historyFromStore, text, voicePrompt, {
-    onChunk: async () => {},
-    onDone: async () => {},
-    onError: async () => {}
-  }, prefs.modelId ?? ctx.env.AI_MODEL);
+  try {
+    const { text: finalTextRaw, usage } = await generateReplyStream(ctx.env, historyFromStore, text, voicePrompt, {
+      onChunk: async () => {},
+      onDone: async () => {},
+      onError: async () => {}
+    }, prefs.modelId ?? ctx.env.AI_MODEL);
 
-  const finalText = extractFinalAnswer(finalTextRaw);
+    const finalText = extractFinalAnswer(finalTextRaw);
   if (!finalText) {
+    placeholderActive = false;
+    clearInterval(placeholderInterval);
     await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, '抱歉，这次没有成功生成语音回复，请再试一次。').catch(() => {});
     return;
   }
@@ -339,7 +351,7 @@ async function runVoiceModeTurn(
 
   const speech = await synthesizeSpeech(ctx.env, finalText);
   if (!speech.ok || !speech.audioBytes) {
-    await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, finalText).catch(() => {});
+    await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, `语音发送失败，已改为文字回复：\n\n${finalText}`).catch(() => {});
     return;
   }
 
@@ -350,13 +362,23 @@ async function runVoiceModeTurn(
   ).then(() => true).catch(() => false);
 
   if (!sent) {
+    placeholderActive = false;
+    clearInterval(placeholderInterval);
     await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, finalText).catch(() => {});
     return;
   }
 
+  placeholderActive = false;
+  clearInterval(placeholderInterval);
   await ctx.api.deleteMessage(chatId, summaryPlaceholder.message_id).catch(async () => {
     await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, '· 语音回复已发送').catch(() => {});
   });
+  } catch (err) {
+    placeholderActive = false;
+    clearInterval(placeholderInterval);
+    console.error('Voice mode failed:', err);
+    await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, '语音模式处理失败，已停止本次语音回复。请先关闭语音模式后再试，或稍后重试。').catch(() => {});
+  }
 }
 
 async function downloadTelegramFile(ctx: BotContext, fileId: string) {
