@@ -14,12 +14,15 @@ import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
 import { sanitizeMarkdown } from '../utils/markdown';
 import { transcribeAudio } from '../services/transcribe';
+import { synthesizeSpeech } from '../services/tts';
+import { generateImage } from '../services/image';
 import { resolveSystemPrompt } from '../config/personas';
 import { searchWeb, buildSearchContext } from '../services/search';
 import { recordNeuronUsage, estimateChatNeurons, WHISPER_NEURONS_PER_MINUTE } from '../storage/neurons-store';
 import { recordActivityAndCount, shouldAlertAndMark } from '../storage/anomaly-store';
 import { parseCsvNumbers } from '../utils/access';
 import type { ChatMessage } from '../types/env';
+import { InputFile } from 'grammy';
 
 // Telegram 对同一条消息的 editMessageText 大约限制在每秒 1 次左右，
 // 太频繁会触发 429。这里设为略高于 1 秒的安全值，在不被限流的前提下
@@ -234,6 +237,8 @@ export async function runAiTurn(
     recordNeuronUsage(ctx.env, estimateChatNeurons(modelId, chatUsage.promptTokens, chatUsage.completionTokens), 'chat')
   ]);
 
+  ctx.waitUntil(maybeSendVoiceReply(ctx, chatId, userId, placeholder.message_id, cleanFinalText));
+
   ctx.waitUntil(
     generateFollowUps(ctx.env, text, cleanFinalText, modelId)
     .then(async (questions) => {
@@ -263,6 +268,46 @@ export async function runAiTurn(
       }).catch(() => {});
     })
   );
+}
+
+async function maybeSendVoiceReply(ctx: BotContext, chatId: number, userId: number, replyToMessageId: number | undefined, text: string) {
+  const prefs = await getUserPreferences(ctx.env, userId);
+  if (!prefs.voiceReplyEnabled) return;
+
+  const speech = await synthesizeSpeech(ctx.env, text);
+  if (!speech.ok || !speech.audioBytes) return;
+
+  await ctx.api.sendVoice(chatId, new InputFile(speech.audioBytes, 'reply.mp3'), replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(() => {});
+}
+
+export async function runImageTurn(
+  ctx: BotContext,
+  chatId: number,
+  userId: number,
+  prompt: string,
+  replyToMessageId: number | undefined
+) {
+  const rate = await checkRateLimit(ctx.env, chatId);
+  if (!rate.ok) {
+    await ctx.reply(`请求太频繁了，请稍后再试。限制：每分钟 ${rate.limit} 次。`);
+    return;
+  }
+
+  const placeholder = await ctx.api.sendMessage(chatId, '· 正在生成图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const image = await generateImage(ctx.env, prompt);
+
+  if (!image.ok || !image.imageBytes) {
+    await ctx.api.editMessageText(chatId, placeholder.message_id, '抱歉，图片生成失败了，请换个描述再试。').catch(() => {});
+    return;
+  }
+
+  await ctx.api.deleteMessage(chatId, placeholder.message_id).catch(() => {});
+  await ctx.api.sendPhoto(chatId, new InputFile(image.imageBytes, 'ai-image.jpg'), {
+    caption: `AI 生图提示词：${prompt.slice(0, 900)}`,
+    ...(replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : {})
+  }).catch(async () => {
+    await ctx.reply('图片已经生成，但发送失败了，请稍后再试。');
+  });
 }
 
 export function registerMessages(bot: Bot<BotContext>) {
@@ -302,6 +347,17 @@ export function registerMessages(bot: Bot<BotContext>) {
     }
 
     const messageId = ctx.message?.message_id ?? ctx.editedMessage?.message_id;
+
+    if (!isEdited && text.toLowerCase().startsWith('/image ')) {
+      const prompt = text.slice(7).trim();
+      if (!prompt) {
+        await ctx.reply('用法：/image 你的图片描述');
+        return;
+      }
+      await runImageTurn(ctx, ctx.chat.id, ctx.from.id, prompt, messageId);
+      return;
+    }
+
     await runAiTurn(ctx, ctx.chat.id, ctx.from.id, text, messageId, { editedNotice: isEdited });
   });
 

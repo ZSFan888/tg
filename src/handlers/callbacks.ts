@@ -3,13 +3,13 @@ import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import type { PersonaKey } from '../types/env';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences, setUserPersona, setUserModel, setWebSearchEnabled } from '../storage/preferences-store';
+import { getUserPreferences, setUserPersona, setUserModel, setWebSearchEnabled, setVoiceReplyEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
 import { MODELS, PROVIDERS, getModelById, getModelByKey, getModelsByProvider, getProviderByKey } from '../config/models';
 import { getFollowUps } from '../storage/followup-store';
-import { runAiTurn } from './messages';
+import { runAiTurn, runImageTurn } from './messages';
 import { isAdmin } from '../utils/access';
 import { getAllKnownUsers } from '../storage/users-store';
 import { getGlobalStats, getStatsHistory, getModelStats } from '../storage/usage-store';
@@ -69,6 +69,29 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
     await ctx.reply(
       `${provider.label} 旗下模型：\n\n选择一个模型：`,
+      { reply_markup: keyboard }
+    );
+  });
+
+  bot.callbackQuery('menu:image', async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
+    await ctx.reply('请直接发送：/image 你的图片描述\n例如：/image 一只穿宇航服的柴犬站在月球上');
+  });
+
+  bot.callbackQuery('menu:voice', async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
+
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const enabled = Boolean(prefs.voiceReplyEnabled);
+    const keyboard = new InlineKeyboard()
+      .text(enabled ? '关闭语音回复' : '开启语音回复', `voice:${enabled ? 'off' : 'on'}`);
+
+    await ctx.reply(
+      enabled
+        ? '语音回复：已开启\n之后我在文字回答后，会额外发一条语音。'
+        : '语音回复：已关闭\n开启后，我会在文字回答后额外发一条语音。',
       { reply_markup: keyboard }
     );
   });
@@ -366,6 +389,20 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
     await ctx.answerCallbackQuery({ text: `已切换到${model.label}` });
     await ctx.editMessageText(`模型已切换为：${model.label}\n${model.note}`);
+  });
+
+  bot.callbackQuery(/^voice:(on|off)$/, async (ctx) => {
+    if (!ctx.from) return;
+    const nextState = ctx.match?.[1] === 'on';
+
+    await setVoiceReplyEnabled(ctx.env, ctx.from.id, nextState);
+
+    await ctx.answerCallbackQuery({ text: nextState ? '语音回复已开启' : '语音回复已关闭' });
+    await ctx.editMessageText(
+      nextState
+        ? '语音回复：已开启\n之后我会在文字回答后额外发一条语音。'
+        : '语音回复：已关闭\n恢复为只输出文字回答。'
+    );
   });
 
   bot.callbackQuery(/^websearch:(on|off)$/, async (ctx) => {

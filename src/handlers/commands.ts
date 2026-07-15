@@ -2,7 +2,7 @@ import { InlineKeyboard, InputFile } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences } from '../storage/preferences-store';
+import { getUserPreferences, setVoiceReplyEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
@@ -39,6 +39,9 @@ export function registerCommands(bot: Bot<BotContext>) {
       .text('切换模型', 'menu:model')
       .text('联网搜索', 'menu:websearch')
       .row()
+      .text('AI 生图', 'menu:image')
+      .text('语音回复', 'menu:voice')
+      .row()
       .text('清空上下文', 'menu:clear')
       .text('使用统计', 'menu:usage')
       .row()
@@ -62,7 +65,7 @@ export function registerCommands(bot: Bot<BotContext>) {
     const lines = [
       '发送 /start 可以打开功能菜单，里面的按钮包含了绝大部分功能：',
       '· 开始聊天 / 偏好设置 / 切换模型 / 联网搜索',
-      '· 清空上下文 / 使用统计 / 导出记录',
+      '· AI 生图 / 语音回复 / 清空上下文 / 使用统计 / 导出记录',
       '',
       '也可以直接发送文字或语音消息，我会自动回复。'
     ];
@@ -110,6 +113,23 @@ export function registerCommands(bot: Bot<BotContext>) {
     if (!ctx.from) return;
     await setPendingAction(ctx.env, ctx.from.id, 'awaiting_custom_prompt');
     await ctx.reply('请发送你想要的系统提示词（描述这个 AI 应该扮演什么角色、用什么语气回答）。5 分钟内有效。');
+  });
+
+  bot.command('image', async (ctx) => {
+    const raw = ctx.match?.trim() ?? '';
+    if (!raw) {
+      await ctx.reply('用法：/image 一只戴墨镜的橘猫坐在咖啡馆窗边');
+      return;
+    }
+    await ctx.reply(`已收到生图请求：${raw}\n也可以直接点击开始菜单里的 AI 生图按钮。`);
+  });
+
+  bot.command('voice', async (ctx) => {
+    if (!ctx.from) return;
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const next = !prefs.voiceReplyEnabled;
+    await setVoiceReplyEnabled(ctx.env, ctx.from.id, next);
+    await ctx.reply(next ? '语音回复：已开启' : '语音回复：已关闭');
   });
 
   bot.command('usage', async (ctx) => {

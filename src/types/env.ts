@@ -39,6 +39,7 @@ export interface UserPreferences {
   customPrompt?: string;
   modelId?: string;
   webSearchEnabled?: boolean;
+  voiceReplyEnabled?: boolean;
   updatedAt: number;
 }
 
