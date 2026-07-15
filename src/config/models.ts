@@ -1,17 +1,13 @@
+import type { ModelTask } from '../types/env';
+
 export interface ModelOption {
   key: string;
   id: string;
   label: string;
   note: string;
   provider: string;
-  /**
-   * Max tokens Workers AI is allowed to generate for this model. Cloudflare's
-   * platform default is only 256 tokens (~300-400 Chinese characters), which
-   * truncates any answer that runs long. We raise this per model based on its
-   * published context window (leaving headroom for the input/history side of
-   * that window), instead of a single global override that could exceed a
-   * smaller model's window and cause request errors.
-   */
+  task: ModelTask;
+  deprecated?: boolean;
   maxTokens: number;
 }
 
@@ -19,6 +15,23 @@ export interface ProviderGroup {
   key: string;
   label: string;
 }
+
+export interface TaskGroup {
+  key: ModelTask;
+  label: string;
+}
+
+export const TASKS: TaskGroup[] = [
+  { key: 'chat', label: '聊天对话' },
+  { key: 'speech_to_text', label: '语音转文字' },
+  { key: 'text_to_speech', label: '文字转语音' },
+  { key: 'image', label: '图片生成' },
+  { key: 'vision', label: '图像理解' },
+  { key: 'translation', label: '翻译' },
+  { key: 'embedding', label: '向量嵌入' },
+  { key: 'rerank', label: '重排排序' },
+  { key: 'classification', label: '分类识别' }
+];
 
 export const PROVIDERS: ProviderGroup[] = [
   { key: 'meta', label: 'Meta（Llama 系列）' },
@@ -30,191 +43,56 @@ export const PROVIDERS: ProviderGroup[] = [
   { key: 'moonshot', label: 'Moonshot AI（Kimi）' },
   { key: 'zhipu', label: '智谱 AI（GLM）' },
   { key: 'nvidia', label: 'NVIDIA（Nemotron）' },
-  { key: 'ibm', label: 'IBM（Granite）' }
+  { key: 'ibm', label: 'IBM（Granite）' },
+  { key: 'deepgram', label: 'Deepgram' },
+  { key: 'black-forest-labs', label: 'Black Forest Labs' },
+  { key: 'stabilityai', label: 'Stability AI' },
+  { key: 'baai', label: 'BAAI' },
+  { key: 'cohere', label: 'Cohere' },
+  { key: 'facebook', label: 'Facebook / Meta Research' }
 ];
 
 export const MODELS: ModelOption[] = [
-  // ---- Meta ----
-  {
-    key: 'fast',
-    id: '@cf/meta/llama-3.2-1b-instruct',
-    label: 'Llama 3.2 1B（默认·最快）',
-    note: '响应最快，几乎不排队，适合日常闲聊',
-    provider: 'meta',
-    maxTokens: 8000
-  },
-  {
-    key: 'balanced',
-    id: '@cf/meta/llama-3.2-3b-instruct',
-    label: 'Llama 3.2 3B（均衡）',
-    note: '比默认模型更聪明一点，速度依然很快',
-    provider: 'meta',
-    maxTokens: 8000
-  },
-  {
-    key: 'llama8b',
-    id: '@cf/meta/llama-3.1-8b-instruct-fast',
-    label: 'Llama 3.1 8B（更强）',
-    note: '理解力更强，适合稍复杂的问题，速度略慢',
-    provider: 'meta',
-    maxTokens: 8000
-  },
-  {
-    key: 'llama8b-fp8',
-    id: '@cf/meta/llama-3.1-8b-instruct-fp8',
-    label: 'Llama 3.1 8B FP8',
-    note: '8B 的量化版本，推理更省资源',
-    provider: 'meta',
-    maxTokens: 8000
-  },
-  {
-    key: 'scout',
-    id: '@cf/meta/llama-4-scout-17b-16e-instruct',
-    label: 'Llama 4 Scout 17B',
-    note: '较新的中型模型，综合能力更强，速度中等',
-    provider: 'meta',
-    maxTokens: 8000
-  },
-  {
-    key: 'llama70b',
-    id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
-    label: 'Llama 3.3 70B（最强·较慢）',
-    note: '目前最强的模型，回答质量最好，但速度最慢、消耗额度最多',
-    provider: 'meta',
-    // This model's context window is only 24,000 tokens total (input + output),
-    // so we cap the output budget lower to leave room for prompt + history.
-    maxTokens: 6000
-  },
+  { key: 'fast', id: '@cf/meta/llama-3.2-1b-instruct', label: 'Llama 3.2 1B（默认·最快）', note: '响应最快，适合日常聊天', provider: 'meta', task: 'chat', maxTokens: 8000 },
+  { key: 'balanced', id: '@cf/meta/llama-3.2-3b-instruct', label: 'Llama 3.2 3B（均衡）', note: '速度和质量更均衡', provider: 'meta', task: 'chat', maxTokens: 8000 },
+  { key: 'llama8b', id: '@cf/meta/llama-3.1-8b-instruct-fast', label: 'Llama 3.1 8B', note: '更强的通用聊天模型', provider: 'meta', task: 'chat', maxTokens: 8000 },
+  { key: 'scout', id: '@cf/meta/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B', note: '综合能力更强', provider: 'meta', task: 'chat', maxTokens: 8000 },
+  { key: 'llama70b', id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', label: 'Llama 3.3 70B', note: '高质量聊天与推理', provider: 'meta', task: 'chat', maxTokens: 6000 },
+  { key: 'qwen30b', id: '@cf/qwen/qwen3-30b-a3b-fp8', label: 'Qwen3 30B', note: '中文表现出色', provider: 'qwen', task: 'chat', maxTokens: 8000 },
+  { key: 'qwen-coder-32b', id: '@cf/qwen/qwen2.5-coder-32b-instruct', label: 'Qwen2.5 Coder 32B', note: '代码能力强化', provider: 'qwen', task: 'chat', maxTokens: 8000 },
+  { key: 'qwq32b', id: '@cf/qwen/qwq-32b', label: 'QwQ 32B', note: '推理增强', provider: 'qwen', task: 'chat', maxTokens: 6000 },
+  { key: 'mistral24b', id: '@cf/mistralai/mistral-small-3.1-24b-instruct', label: 'Mistral Small 3.1 24B', note: '逻辑较强', provider: 'mistral', task: 'chat', maxTokens: 8000 },
+  { key: 'gemma4-26b', id: '@cf/google/gemma-4-26b-a4b-it', label: 'Gemma 4 26B', note: 'Google 开放模型', provider: 'google', task: 'chat', maxTokens: 8000 },
+  { key: 'gptoss120b', id: '@cf/openai/gpt-oss-120b', label: 'GPT-OSS 120B', note: '复杂任务更强', provider: 'openai', task: 'chat', maxTokens: 8000 },
+  { key: 'gptoss20b', id: '@cf/openai/gpt-oss-20b', label: 'GPT-OSS 20B', note: '更快的开源 OpenAI 模型', provider: 'openai', task: 'chat', maxTokens: 8000 },
+  { key: 'deepseek-r1-32b', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', label: 'DeepSeek R1 Distill 32B', note: '数学逻辑更强', provider: 'deepseek', task: 'chat', maxTokens: 6000 },
+  { key: 'kimi-k2-6', id: '@cf/moonshotai/kimi-k2.6', label: 'Kimi K2.6', note: '长上下文聊天', provider: 'moonshot', task: 'chat', maxTokens: 8000 },
+  { key: 'kimi-k2-7-code', id: '@cf/moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code', note: '代码优化版本', provider: 'moonshot', task: 'chat', maxTokens: 8000 },
+  { key: 'glm-4-7-flash', id: '@cf/zai-org/glm-4.7-flash', label: 'GLM-4.7 Flash', note: '快速多语言聊天', provider: 'zhipu', task: 'chat', maxTokens: 8000 },
+  { key: 'glm-5-2', id: '@cf/zai-org/glm-5.2', label: 'GLM-5.2', note: '智谱旗舰模型', provider: 'zhipu', task: 'chat', maxTokens: 8000 },
+  { key: 'nemotron3-120b', id: '@cf/nvidia/nemotron-3-120b-a12b', label: 'Nemotron 3 120B', note: '多智能体场景', provider: 'nvidia', task: 'chat', maxTokens: 8000 },
+  { key: 'granite-4-micro', id: '@cf/ibm/granite-4.0-h-micro', label: 'Granite 4.0 Micro', note: '低延迟轻量聊天', provider: 'ibm', task: 'chat', maxTokens: 8000 },
 
-  // ---- Qwen ----
-  {
-    key: 'qwen30b',
-    id: '@cf/qwen/qwen3-30b-a3b-fp8',
-    label: 'Qwen3 30B',
-    note: '阿里 Qwen 系列，中文理解能力出色',
-    provider: 'qwen',
-    maxTokens: 8000
-  },
-  {
-    key: 'qwen-coder-32b',
-    id: '@cf/qwen/qwen2.5-coder-32b-instruct',
-    label: 'Qwen2.5 Coder 32B',
-    note: '代码能力强化版本，适合写代码、调试、解释代码',
-    provider: 'qwen',
-    maxTokens: 8000
-  },
-  {
-    key: 'qwq32b',
-    id: '@cf/qwen/qwq-32b',
-    label: 'QwQ 32B（推理增强）',
-    note: '带思考链的推理模型，适合较难的逻辑/数学问题，速度较慢',
-    provider: 'qwen',
-    maxTokens: 6000
-  },
+  { key: 'whisper', id: '@cf/openai/whisper', label: 'Whisper', note: '通用语音转文字', provider: 'openai', task: 'speech_to_text', maxTokens: 0 },
+  { key: 'whisper-large-v3-turbo', id: '@cf/openai/whisper-large-v3-turbo', label: 'Whisper Large v3 Turbo', note: '更快更强的 ASR', provider: 'openai', task: 'speech_to_text', maxTokens: 0 },
+  { key: 'deepgram-nova-3', id: '@cf/deepgram/nova-3', label: 'Deepgram Nova-3', note: '高质量语音识别', provider: 'deepgram', task: 'speech_to_text', maxTokens: 0 },
 
-  // ---- Mistral AI ----
-  {
-    key: 'mistral24b',
-    id: '@cf/mistralai/mistral-small-3.1-24b-instruct',
-    label: 'Mistral Small 3.1 24B',
-    note: '欧洲厂商模型，逻辑推理能力较强',
-    provider: 'mistral',
-    maxTokens: 8000
-  },
+  { key: 'melotts', id: '@cf/myshell-ai/melotts', label: 'MeloTTS', note: '多语言文字转语音', provider: 'deepgram', task: 'text_to_speech', maxTokens: 0 },
 
-  // ---- Google ----
-  {
-    key: 'gemma4-26b',
-    id: '@cf/google/gemma-4-26b-a4b-it',
-    label: 'Gemma 4 26B',
-    note: 'Google 最新一代开放模型，综合能力均衡',
-    provider: 'google',
-    maxTokens: 8000
-  },
+  { key: 'flux-schnell', id: '@cf/black-forest-labs/flux-1-schnell', label: 'FLUX.1 Schnell', note: '快速图片生成', provider: 'black-forest-labs', task: 'image', maxTokens: 0 },
+  { key: 'sd-xl-base', id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', label: 'SDXL Base 1.0', note: '高质量图片生成', provider: 'stabilityai', task: 'image', maxTokens: 0 },
 
-  // ---- OpenAI（开源权重版）----
-  {
-    key: 'gptoss120b',
-    id: '@cf/openai/gpt-oss-120b',
-    label: 'GPT-OSS 120B',
-    note: 'OpenAI 开源权重大模型，推理能力强，适合复杂任务，速度较慢',
-    provider: 'openai',
-    maxTokens: 8000
-  },
-  {
-    key: 'gptoss20b',
-    id: '@cf/openai/gpt-oss-20b',
-    label: 'GPT-OSS 20B',
-    note: 'OpenAI 开源权重轻量版，速度更快，适合日常任务',
-    provider: 'openai',
-    maxTokens: 8000
-  },
+  { key: 'llava-7b', id: '@cf/llava-hf/llava-1.5-7b-hf', label: 'LLaVA 1.5 7B', note: '图像理解与问答', provider: 'meta', task: 'vision', maxTokens: 4000 },
+  { key: 'moondream', id: '@cf/vikhyatk/moondream2', label: 'Moondream 2', note: '轻量视觉问答', provider: 'meta', task: 'vision', maxTokens: 4000 },
 
-  // ---- DeepSeek ----
-  {
-    key: 'deepseek-r1-32b',
-    id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
-    label: 'DeepSeek R1 Distill 32B',
-    note: '带推理链的模型，擅长数学/逻辑类难题，速度较慢',
-    provider: 'deepseek',
-    maxTokens: 6000
-  },
+  { key: 'm2m100', id: '@cf/facebook/m2m100-1.2b', label: 'M2M100 1.2B', note: '多语言翻译', provider: 'facebook', task: 'translation', maxTokens: 0 },
 
-  // ---- Moonshot AI（Kimi）----
-  {
-    key: 'kimi-k2-6',
-    id: '@cf/moonshotai/kimi-k2.6',
-    label: 'Kimi K2.6',
-    note: '千亿参数级开源模型，支持超长上下文，综合能力强',
-    provider: 'moonshot',
-    maxTokens: 8000
-  },
-  {
-    key: 'kimi-k2-7-code',
-    id: '@cf/moonshotai/kimi-k2.7-code',
-    label: 'Kimi K2.7 Code',
-    note: '面向代码/智能体任务优化的版本',
-    provider: 'moonshot',
-    maxTokens: 8000
-  },
+  { key: 'bge-base-en', id: '@cf/baai/bge-base-en-v1.5', label: 'BGE Base EN v1.5', note: '英文向量嵌入', provider: 'baai', task: 'embedding', maxTokens: 0 },
+  { key: 'bge-large-zh', id: '@cf/baai/bge-large-zh-v1.5', label: 'BGE Large ZH v1.5', note: '中文向量嵌入', provider: 'baai', task: 'embedding', maxTokens: 0 },
 
-  // ---- 智谱 AI（GLM）----
-  {
-    key: 'glm-4-7-flash',
-    id: '@cf/zai-org/glm-4.7-flash',
-    label: 'GLM-4.7 Flash',
-    note: '快速多语言对话模型，性价比高，适合日常对话',
-    provider: 'zhipu',
-    maxTokens: 8000
-  },
-  {
-    key: 'glm-5-2',
-    id: '@cf/zai-org/glm-5.2',
-    label: 'GLM-5.2',
-    note: '智谱旗舰级模型，擅长复杂任务和智能体场景',
-    provider: 'zhipu',
-    maxTokens: 8000
-  },
+  { key: 'bge-reranker-base', id: '@cf/baai/bge-reranker-base', label: 'BGE Reranker Base', note: '检索结果重排', provider: 'baai', task: 'rerank', maxTokens: 0 },
 
-  // ---- NVIDIA ----
-  {
-    key: 'nemotron3-120b',
-    id: '@cf/nvidia/nemotron-3-120b-a12b',
-    label: 'Nemotron 3 120B',
-    note: '面向多智能体场景的高精度模型，速度较慢',
-    provider: 'nvidia',
-    maxTokens: 8000
-  },
-
-  // ---- IBM ----
-  {
-    key: 'granite-4-micro',
-    id: '@cf/ibm/granite-4.0-h-micro',
-    label: 'Granite 4.0 Micro',
-    note: '轻量级模型，适合边缘/低延迟场景，指令跟随能力强',
-    provider: 'ibm',
-    maxTokens: 8000
-  }
+  { key: 'distilbert-sst2', id: '@cf/huggingface/distilbert-sst-2-int8', label: 'DistilBERT SST-2', note: '情感/二分类', provider: 'cohere', task: 'classification', maxTokens: 0 }
 ];
 
 const DEFAULT_MAX_TOKENS = 8000;
@@ -231,8 +109,16 @@ export function getModelsByProvider(providerKey: string): ModelOption[] {
   return MODELS.filter((m) => m.provider === providerKey);
 }
 
+export function getModelsByTask(task: ModelTask): ModelOption[] {
+  return MODELS.filter((m) => m.task === task && !m.deprecated);
+}
+
 export function getProviderByKey(key?: string): ProviderGroup | undefined {
   return PROVIDERS.find((p) => p.key === key);
+}
+
+export function getTaskByKey(key?: string): TaskGroup | undefined {
+  return TASKS.find((t) => t.key === key);
 }
 
 export function getMaxTokensForModel(id?: string): number {

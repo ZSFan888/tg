@@ -36,10 +36,13 @@ export interface RateLimitState {
 
 export type PersonaKey = 'default' | 'concise' | 'professional' | 'humorous' | 'custom';
 
+export type ModelTask = 'chat' | 'speech_to_text' | 'text_to_speech' | 'image' | 'vision' | 'translation' | 'embedding' | 'rerank' | 'classification';
+
 export interface UserPreferences {
   persona: PersonaKey;
   customPrompt?: string;
   modelId?: string;
+  activeTask?: ModelTask;
   voiceReplyEnabled?: boolean;
   voiceModeEnabled?: boolean;
   updatedAt: number;

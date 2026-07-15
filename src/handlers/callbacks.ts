@@ -1,13 +1,13 @@
 import { InlineKeyboard, InputFile } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
-import type { PersonaKey } from '../types/env';
+import type { ModelTask, PersonaKey } from '../types/env';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
 import { getUserPreferences, setUserPersona, setUserModel, setVoiceReplyEnabled, setVoiceModeEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
-import { MODELS, PROVIDERS, getModelById, getModelByKey, getModelsByProvider, getProviderByKey } from '../config/models';
+import { MODELS, PROVIDERS, TASKS, getModelById, getModelByKey, getModelsByProvider, getModelsByTask, getProviderByKey, getTaskByKey } from '../config/models';
 import { getFollowUps } from '../storage/followup-store';
 import { runAiTurn, runImageTurn } from './messages';
 import { isAdmin } from '../utils/access';
@@ -31,46 +31,33 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     if (!ctx.from) return;
     await ctx.answerCallbackQuery();
 
-    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
-    const current = getModelById(prefs.modelId ?? ctx.env.AI_MODEL);
-
     const keyboard = new InlineKeyboard();
-    for (const provider of PROVIDERS) {
-      const count = getModelsByProvider(provider.key).length;
-      const isCurrentProvider = getModelsByProvider(provider.key).some((m) => m.id === current.id);
-      const label = isCurrentProvider ? `» ${provider.label}（${count}）` : `${provider.label}（${count}）`;
-      keyboard.text(label, `modelprovider:${provider.key}`).row();
+    for (const task of TASKS) {
+      const count = getModelsByTask(task.key).length;
+      keyboard.text(`${task.label}（${count}）`, `modeltask:${task.key}`).row();
     }
 
-    await ctx.reply(
-      `当前模型：${current.label}\n${current.note}\n\n先选择模型提供商：`,
-      { reply_markup: keyboard }
-    );
+    await ctx.reply('先选择模型任务类型：', { reply_markup: keyboard });
   });
 
-  bot.callbackQuery(/^modelprovider:(.+)$/, async (ctx) => {
+  bot.callbackQuery(/^modeltask:(.+)$/, async (ctx) => {
     if (!ctx.from) return;
     await ctx.answerCallbackQuery();
 
-    const providerKey = ctx.match[1];
-    const provider = getProviderByKey(providerKey);
-    if (!provider) return;
+    const taskKey = ctx.match[1] as ModelTask;
+    const task = getTaskByKey(taskKey);
+    if (!task) return;
 
-    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
-    const current = getModelById(prefs.modelId ?? ctx.env.AI_MODEL);
-    const models = getModelsByProvider(providerKey);
-
+    const models = getModelsByTask(taskKey);
     const keyboard = new InlineKeyboard();
     for (const model of models) {
-      const label = model.id === current.id ? `» ${model.label}` : model.label;
-      keyboard.text(label, `model:${model.key}`).row();
+      keyboard.text(model.label, `model:${model.key}`).row();
     }
-    keyboard.text('« 返回提供商列表', 'menu:model');
+    keyboard.text('« 返回任务类型', 'menu:model');
 
-    await ctx.reply(
-      `${provider.label} 旗下模型：\n\n选择一个模型：`,
-      { reply_markup: keyboard }
-    );
+    await ctx.reply(`${task.label}模型：
+
+选择一个模型：`, { reply_markup: keyboard });
   });
 
   bot.callbackQuery('menu:image', async (ctx) => {
