@@ -374,7 +374,8 @@ export async function runImageTurn(
   const image = await generateImage(ctx.env, prompt);
 
   if (!image.ok || !image.imageBytes) {
-    await ctx.api.editMessageText(chatId, placeholder.message_id, '抱歉，图片生成失败了，请换个描述再试。').catch(() => {});
+    const reason = image.errorMessage ? `\n原因：${image.errorMessage}` : '';
+    await ctx.api.editMessageText(chatId, placeholder.message_id, `抱歉，图片生成失败了，请换个描述再试。${reason}`).catch(() => {});
     return;
   }
 
@@ -410,7 +411,8 @@ export async function runImageEditTurn(
 
   const image = await editImage(ctx.env, prompt, source);
   if (!image.ok || !image.imageBytes) {
-    await ctx.api.editMessageText(chatId, placeholder.message_id, '抱歉，图片重绘失败了，请换个修改要求再试。').catch(() => {});
+    const reason = image.errorMessage ? `\n原因：${image.errorMessage}` : '';
+    await ctx.api.editMessageText(chatId, placeholder.message_id, `抱歉，图片重绘失败了，请换个修改要求再试。${reason}`).catch(() => {});
     return;
   }
 
