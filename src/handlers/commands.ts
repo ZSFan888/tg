@@ -2,7 +2,7 @@ import { InlineKeyboard, InputFile } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences, setVoiceReplyEnabled } from '../storage/preferences-store';
+import { getUserPreferences } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
@@ -122,14 +122,6 @@ export function registerCommands(bot: Bot<BotContext>) {
       return;
     }
     await ctx.reply(`已收到生图请求：${raw}\n也可以直接点击开始菜单里的 AI 生图按钮。`);
-  });
-
-  bot.command('voice', async (ctx) => {
-    if (!ctx.from) return;
-    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
-    const next = !prefs.voiceReplyEnabled;
-    await setVoiceReplyEnabled(ctx.env, ctx.from.id, next);
-    await ctx.reply(next ? '语音回复：已开启' : '语音回复：已关闭');
   });
 
   bot.command('usage', async (ctx) => {

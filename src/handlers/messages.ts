@@ -344,6 +344,13 @@ export function registerMessages(bot: Bot<BotContext>) {
         await ctx.reply('自定义提示词已保存，现在开始生效。使用 /settings 可以随时切回预设风格。');
         return;
       }
+
+      if (pending?.action === 'awaiting_image_prompt') {
+        await clearPendingAction(ctx.env, ctx.from.id);
+        const questionMsg = await ctx.reply(`已收到你的生图需求：${text}`);
+        await runImageTurn(ctx, ctx.chat.id, ctx.from.id, text, questionMsg.message_id);
+        return;
+      }
     }
 
     const messageId = ctx.message?.message_id ?? ctx.editedMessage?.message_id;
