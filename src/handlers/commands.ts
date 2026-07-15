@@ -38,12 +38,11 @@ export function registerCommands(bot: Bot<BotContext>) {
       .text('偏好设置', 'menu:settings')
       .row()
       .text('切换模型', 'menu:model')
-      .text('联网搜索', 'menu:websearch')
-      .row()
       .text('AI 生图', 'menu:image')
-      .text('语音回复', 'menu:voice')
       .row()
+      .text('语音回复', 'menu:voice')
       .text('语音模式', 'menu:voicemode')
+
       .row()
       .text('清空上下文', 'menu:clear')
       .text('使用统计', 'menu:usage')
@@ -67,8 +66,8 @@ export function registerCommands(bot: Bot<BotContext>) {
   bot.command('help', async (ctx) => {
     const lines = [
       '发送 /start 可以打开功能菜单，里面的按钮包含了绝大部分功能：',
-      '· 开始聊天 / 偏好设置 / 切换模型 / 联网搜索',
-      '· AI 生图 / 语音回复 / 清空上下文 / 使用统计 / 导出记录',
+      '· 开始聊天 / 偏好设置 / 切换模型 / AI 生图',
+      '· 语音回复 / 语音模式 / 清空上下文 / 使用统计 / 导出记录',
       '',
       '也可以直接发送文字、语音，或者先发图片再告诉我怎么改，我会自动回复。'
     ];
@@ -228,21 +227,6 @@ export function registerCommands(bot: Bot<BotContext>) {
   bot.command('clear', async (ctx) => {
     await clearChatHistory(ctx.env, ctx.chat.id);
     await ctx.reply('已清空当前会话上下文。');
-  });
-
-  bot.command('websearch', async (ctx) => {
-    if (!ctx.from) return;
-    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
-    const enabled = Boolean(prefs.webSearchEnabled);
-
-    const keyboard = new InlineKeyboard()
-      .text(enabled ? '» 已开启' : '已开启', 'websearch:on')
-      .text(enabled ? '已关闭' : '» 已关闭', 'websearch:off');
-
-    await ctx.reply(
-      `联网搜索：${enabled ? '已开启' : '已关闭'}\n开启后，每次提问会先搜索最新信息再回答。\n选择新的状态：`,
-      { reply_markup: keyboard }
-    );
   });
 
   bot.command('export', async (ctx) => {

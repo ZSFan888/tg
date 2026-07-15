@@ -3,7 +3,7 @@ import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import type { PersonaKey } from '../types/env';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences, setUserPersona, setUserModel, setWebSearchEnabled, setVoiceReplyEnabled, setVoiceModeEnabled } from '../storage/preferences-store';
+import { getUserPreferences, setUserPersona, setUserModel, setVoiceReplyEnabled, setVoiceModeEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
@@ -110,23 +110,6 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       enabled
         ? '语音模式：已开启\n你发语音时，我会优先直接回语音，更像语音助手。'
         : '语音模式：已关闭\n开启后，你发语音给我时，我会优先回语音。',
-      { reply_markup: keyboard }
-    );
-  });
-
-  bot.callbackQuery('menu:websearch', async (ctx) => {
-    if (!ctx.from) return;
-    await ctx.answerCallbackQuery();
-
-    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
-    const enabled = Boolean(prefs.webSearchEnabled);
-
-    const keyboard = new InlineKeyboard()
-      .text(enabled ? '» 已开启' : '已开启', 'websearch:on')
-      .text(enabled ? '已关闭' : '» 已关闭', 'websearch:off');
-
-    await ctx.reply(
-      `联网搜索：${enabled ? '已开启' : '已关闭'}\n开启后，每次提问会先搜索最新信息再回答。\n选择新的状态：`,
       { reply_markup: keyboard }
     );
   });
@@ -434,26 +417,6 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       nextState
         ? '语音回复：已开启\n之后我会在文字回答后额外发一条语音。'
         : '语音回复：已关闭\n恢复为只输出文字回答。'
-    );
-  });
-
-  bot.callbackQuery(/^websearch:(on|off)$/, async (ctx) => {
-    if (!ctx.from) return;
-    const nextState = ctx.match?.[1] === 'on';
-
-    await setWebSearchEnabled(ctx.env, ctx.from.id, nextState);
-
-    if (nextState && !ctx.env.TAVILY_API_KEY) {
-      await ctx.answerCallbackQuery({ text: '管理员还没配置搜索密钥' });
-      await ctx.editMessageText('联网搜索：已开启\n但管理员还没有配置搜索服务的密钥，暂时无法生效。');
-      return;
-    }
-
-    await ctx.answerCallbackQuery({ text: nextState ? '联网搜索已开启' : '联网搜索已关闭' });
-    await ctx.editMessageText(
-      nextState
-        ? '联网搜索：已开启\n之后每次提问，我会先搜索最新信息再回答。'
-        : '联网搜索：已关闭\n回到只用模型自身知识回答。'
     );
   });
 

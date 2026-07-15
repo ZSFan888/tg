@@ -17,7 +17,6 @@ import { transcribeAudio } from '../services/transcribe';
 import { synthesizeSpeech } from '../services/tts';
 import { generateImage, editImage } from '../services/image';
 import { resolveSystemPrompt } from '../config/personas';
-import { searchWeb, buildSearchContext } from '../services/search';
 import { recordNeuronUsage, estimateChatNeurons, WHISPER_NEURONS_PER_MINUTE } from '../storage/neurons-store';
 import { recordActivityAndCount, shouldAlertAndMark } from '../storage/anomaly-store';
 import { parseCsvNumbers } from '../utils/access';
@@ -95,10 +94,9 @@ export async function runAiTurn(
   const history = historyFromStore;
   const modelId = prefs.modelId ?? ctx.env.AI_MODEL;
 
-  const willSearch = prefs.webSearchEnabled && Boolean(ctx.env.TAVILY_API_KEY);
-  let placeholderBase = options.editedNotice
+  const placeholderBase = options.editedNotice
     ? '· 检测到消息已编辑，重新生成回答'
-    : (willSearch ? '· 正在联网搜索' : '思考中');
+    : '思考中';
 
   const placeholder = await ctx.api.sendMessage(
     chatId,
@@ -117,16 +115,7 @@ export async function runAiTurn(
       .catch(() => {});
   }, 900);
 
-  let prompt = basePrompt;
-  if (willSearch) {
-    const searchOutcome = await searchWeb(ctx.env, text);
-    const searchContext = buildSearchContext(searchOutcome, text);
-    if (searchContext) {
-      prompt = `${basePrompt}\n\n${searchContext}`;
-    }
-    placeholderBase = '思考中';
-    dotFrame = 0;
-  }
+  const prompt = basePrompt;
 
   let lastEditedText = '';
   let lastEditAt = 0;

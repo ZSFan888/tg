@@ -38,7 +38,6 @@ export interface UserPreferences {
   persona: PersonaKey;
   customPrompt?: string;
   modelId?: string;
-  webSearchEnabled?: boolean;
   voiceReplyEnabled?: boolean;
   voiceModeEnabled?: boolean;
   updatedAt: number;
