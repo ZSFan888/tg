@@ -11,7 +11,6 @@ export interface Env {
   SYSTEM_PROMPT: string;
   MAX_HISTORY?: string;
   RATE_LIMIT_PER_MINUTE?: string;
-  BOT_KV: KVNamespace;
   DB: D1Database;
   AI: Ai;
   GROUP_MENTION_REQUIRED?: string;

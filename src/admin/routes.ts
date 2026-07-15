@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 import { setCookie, getCookie } from 'hono/cookie';
 import type { Env } from '../types/env';
 import { resolveEnv } from '../storage/settings-store';
+import { ensureSchema } from '../db/schema';
 import { getSettingsOverride, updateSettingsOverride, resetSettingOverride, SETTINGS_META } from '../storage/settings-store';
 import {
   hasAdminPassword,
@@ -33,6 +34,7 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
 
   app.get('/api/public-status', async (c) => {
     const env = await resolveEnv(c.env);
+    await ensureSchema(env);
 
     let webhookOk = false;
     let webhookUrl: string | undefined;

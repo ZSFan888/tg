@@ -79,11 +79,27 @@ export const SETTINGS_META: SettingMeta[] = [
   }
 ];
 
-const SETTINGS_KEY = 'admin:settings';
+const SETTINGS_ROW_ID = 1;
 
 export async function getSettingsOverride(env: Env): Promise<SettingsOverride> {
-  const raw = await env.BOT_KV.get(SETTINGS_KEY, 'json');
-  return (raw as SettingsOverride | null) ?? {};
+  const row = await env.DB.prepare('SELECT data FROM settings_override WHERE id = ?')
+    .bind(SETTINGS_ROW_ID)
+    .first<{ data: string }>();
+  if (!row) return {};
+  try {
+    return JSON.parse(row.data) as SettingsOverride;
+  } catch {
+    return {};
+  }
+}
+
+async function saveSettingsOverride(env: Env, data: SettingsOverride) {
+  await env.DB.prepare(
+    `INSERT INTO settings_override (id, data) VALUES (?, ?)
+     ON CONFLICT(id) DO UPDATE SET data = excluded.data`
+  )
+    .bind(SETTINGS_ROW_ID, JSON.stringify(data))
+    .run();
 }
 
 export async function updateSettingsOverride(env: Env, patch: SettingsOverride): Promise<SettingsOverride> {
@@ -100,14 +116,14 @@ export async function updateSettingsOverride(env: Env, patch: SettingsOverride):
     }
   }
 
-  await env.BOT_KV.put(SETTINGS_KEY, JSON.stringify(next));
+  await saveSettingsOverride(env, next);
   return next;
 }
 
 export async function resetSettingOverride(env: Env, key: SettingsKey): Promise<SettingsOverride> {
   const existing = await getSettingsOverride(env);
   delete existing[key];
-  await env.BOT_KV.put(SETTINGS_KEY, JSON.stringify(existing));
+  await saveSettingsOverride(env, existing);
   return existing;
 }
 

@@ -1,8 +1,7 @@
 import type { Env } from '../types/env';
 
-const AUTH_KEY = 'admin:auth';
-const SESSION_PREFIX = 'admin:session:';
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const SESSION_TTL_MS = 60 * 60 * 24 * 7 * 1000;
+const AUTH_ROW_ID = 1;
 
 interface AuthRecord {
   passwordHash: string;
@@ -44,21 +43,32 @@ async function hashPassword(password: string, salt: string): Promise<string> {
   return bufferToHex(derived);
 }
 
+async function getAuthRecord(env: Env): Promise<AuthRecord | null> {
+  const row = await env.DB.prepare('SELECT password_hash, salt, updated_at FROM admin_auth WHERE id = ?')
+    .bind(AUTH_ROW_ID)
+    .first<{ password_hash: string; salt: string; updated_at: number }>();
+  if (!row) return null;
+  return { passwordHash: row.password_hash, salt: row.salt, updatedAt: row.updated_at };
+}
+
 export async function hasAdminPassword(env: Env): Promise<boolean> {
-  const raw = await env.BOT_KV.get(AUTH_KEY, 'json');
-  return raw !== null;
+  const record = await getAuthRecord(env);
+  return record !== null;
 }
 
 export async function setAdminPassword(env: Env, password: string): Promise<void> {
   const salt = randomHex(16);
   const passwordHash = await hashPassword(password, salt);
-  const record: AuthRecord = { passwordHash, salt, updatedAt: Date.now() };
-  await env.BOT_KV.put(AUTH_KEY, JSON.stringify(record));
+  await env.DB.prepare(
+    `INSERT INTO admin_auth (id, password_hash, salt, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash, salt = excluded.salt, updated_at = excluded.updated_at`
+  )
+    .bind(AUTH_ROW_ID, passwordHash, salt, Date.now())
+    .run();
 }
 
 export async function verifyAdminPassword(env: Env, password: string): Promise<boolean> {
-  const raw = await env.BOT_KV.get(AUTH_KEY, 'json');
-  const record = raw as AuthRecord | null;
+  const record = await getAuthRecord(env);
   if (!record) return false;
   const attemptHash = await hashPassword(password, record.salt);
   return attemptHash === record.passwordHash;
@@ -66,20 +76,25 @@ export async function verifyAdminPassword(env: Env, password: string): Promise<b
 
 export async function createAdminSession(env: Env): Promise<string> {
   const token = randomHex(32);
-  await env.BOT_KV.put(
-    `${SESSION_PREFIX}${token}`,
-    JSON.stringify({ createdAt: Date.now() }),
-    { expirationTtl: SESSION_TTL_SECONDS }
-  );
+  await env.DB.prepare('INSERT INTO admin_sessions (token, created_at) VALUES (?, ?)')
+    .bind(token, Date.now())
+    .run();
   return token;
 }
 
 export async function validateAdminSession(env: Env, token: string | undefined): Promise<boolean> {
   if (!token) return false;
-  const raw = await env.BOT_KV.get(`${SESSION_PREFIX}${token}`);
-  return raw !== null;
+  const row = await env.DB.prepare('SELECT created_at FROM admin_sessions WHERE token = ?')
+    .bind(token)
+    .first<{ created_at: number }>();
+  if (!row) return false;
+  if (Date.now() - row.created_at > SESSION_TTL_MS) {
+    await destroyAdminSession(env, token);
+    return false;
+  }
+  return true;
 }
 
 export async function destroyAdminSession(env: Env, token: string): Promise<void> {
-  await env.BOT_KV.delete(`${SESSION_PREFIX}${token}`);
+  await env.DB.prepare('DELETE FROM admin_sessions WHERE token = ?').bind(token).run();
 }

@@ -5,11 +5,15 @@ import { BOT_COMMANDS } from './bot/commands-menu';
 import { resolveEnv } from './storage/settings-store';
 import { registerAdminRoutes } from './admin/routes';
 import { isDuplicateUpdate, pruneOldUpdates } from './storage/update-dedup-store';
+import { ensureSchema } from './db/schema';
 
 const app = new Hono<{ Bindings: Env }>();
 
 // '/' 由 public/index.html 静态提供可视化状态页，此处仅保留健康检查 API
-app.get('/healthz', (c) => c.json({ ok: true, now: Date.now() }));
+app.get('/healthz', async (c) => {
+  await ensureSchema(c.env);
+  return c.json({ ok: true, now: Date.now() });
+});
 
 app.post('/telegram/webhook', async (c) => {
   const secret = c.req.header('x-telegram-bot-api-secret-token');
@@ -18,6 +22,7 @@ app.post('/telegram/webhook', async (c) => {
   }
 
   const resolvedEnv = await resolveEnv(c.env);
+  await ensureSchema(resolvedEnv);
 
   // Telegram 会在 webhook 响应超时（通常几秒）后重发同一个 update，
   // 如果不去重，AI 生成流程会被同一条消息触发两次，导致用户收到两次回答。
