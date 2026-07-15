@@ -267,6 +267,22 @@ export async function runAiTurn(
   );
 }
 
+
+function extractFinalAnswer(text: string): string {
+  const clean = sanitizeMarkdown(text).trim();
+  const markers = ['语音摘要：', '· 识别结果：'];
+  let result = clean;
+  for (const marker of markers) {
+    if (result.startsWith(marker)) {
+      result = result.slice(marker.length).trim();
+    }
+  }
+  return result
+    .replace(/^好的[，,]\s*/u, '')
+    .replace(/^下面[是为：:：].*$/gmu, '')
+    .trim();
+}
+
 async function maybeSendVoiceReply(ctx: BotContext, chatId: number, userId: number, replyToMessageId: number | undefined, text: string) {
   const prefs = await getUserPreferences(ctx.env, userId);
   if (!prefs.voiceReplyEnabled) return;
@@ -274,7 +290,9 @@ async function maybeSendVoiceReply(ctx: BotContext, chatId: number, userId: numb
   const speech = await synthesizeSpeech(ctx.env, text);
   if (!speech.ok || !speech.audioBytes) return;
 
-  await ctx.api.sendVoice(chatId, new InputFile(speech.audioBytes, 'reply.mp3'), replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(() => {});
+  await ctx.api.sendVoice(chatId, new InputFile(speech.audioBytes, 'reply.ogg'), replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(async () => {
+    await ctx.reply(extractFinalAnswer(text), replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(() => {});
+  });
 }
 
 async function runVoiceModeTurn(
@@ -284,54 +302,40 @@ async function runVoiceModeTurn(
   text: string,
   replyToMessageId: number | undefined
 ) {
-  const summaryPlaceholder = await ctx.reply('· 正在组织语音回复…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const summaryPlaceholder = await ctx.reply('· 正在准备语音回复…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
 
-  const originalSendMessage = ctx.api.sendMessage.bind(ctx.api);
-  const originalEditText = ctx.api.editMessageText.bind(ctx.api);
-  const originalEditMarkup = ctx.api.editMessageReplyMarkup.bind(ctx.api);
+  const [prefs, historyFromStore] = await Promise.all([
+    getUserPreferences(ctx.env, userId),
+    getChatHistory(ctx.env, chatId)
+  ]);
+  const { prompt: resolvedBasePrompt } = resolveSystemPrompt(prefs);
+  const voicePrompt = `${resolvedBasePrompt}
 
-  let finalText = '';
+当前是语音模式。请使用简短、自然、口语化、适合直接朗读的中文回答。优先 1 到 3 句，总长度尽量控制在 80 个中文字符以内，不要使用复杂列表，不要写长段落，不要加标题。直接回答用户问题，不要展示你的思考过程，不要分析需求，不要分步骤解释。`;
 
-  ctx.api.sendMessage = (async (chat_id: number | string, text: string, other?: unknown) => {
-    if (Number(chat_id) === chatId && typeof text === 'string') {
-      finalText = text;
-      return summaryPlaceholder as never;
-    }
-    return originalSendMessage(chat_id as never, text as never, other as never);
-  }) as typeof ctx.api.sendMessage;
+  const { text: finalTextRaw, usage } = await generateReplyStream(ctx.env, historyFromStore, text, voicePrompt, {
+    onChunk: async () => {},
+    onDone: async () => {},
+    onError: async () => {}
+  }, prefs.modelId ?? ctx.env.AI_MODEL);
 
-  ctx.api.editMessageText = (async (chat_id: number | string, message_id: number, text: string, other?: unknown) => {
-    if (Number(chat_id) === chatId && message_id === summaryPlaceholder.message_id && typeof text === 'string') {
-      finalText = text.replace(/ ▌$/, '');
-      return summaryPlaceholder as never;
-    }
-    return originalEditText(chat_id as never, message_id as never, text as never, other as never);
-  }) as typeof ctx.api.editMessageText;
-
-  ctx.api.editMessageReplyMarkup = (async (chat_id: number | string, message_id: number, other?: unknown) => {
-    if (Number(chat_id) === chatId && message_id === summaryPlaceholder.message_id) {
-      return true as never;
-    }
-    return originalEditMarkup(chat_id as never, message_id as never, other as never);
-  }) as typeof ctx.api.editMessageReplyMarkup;
-
-  try {
-    await runAiTurn(ctx, chatId, userId, text, replyToMessageId, {
-      voiceFirstReply: true,
-      suppressVoiceReply: true,
-      noFollowUps: true
-    });
-  } finally {
-    ctx.api.sendMessage = originalSendMessage;
-    ctx.api.editMessageText = originalEditText;
-    ctx.api.editMessageReplyMarkup = originalEditMarkup;
-  }
-
-  finalText = sanitizeMarkdown(finalText).trim();
+  const finalText = extractFinalAnswer(finalTextRaw);
   if (!finalText) {
     await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, '抱歉，这次没有成功生成语音回复，请再试一次。').catch(() => {});
     return;
   }
+
+  await Promise.all([
+    saveChatHistory(ctx.env, chatId, [
+      ...historyFromStore,
+      { role: 'user', content: text },
+      { role: 'assistant', content: finalText }
+    ]),
+    incrementUsage(ctx.env, userId),
+    incrementGlobalStats(ctx.env),
+    incrementModelUsage(ctx.env, prefs.modelId ?? ctx.env.AI_MODEL),
+    recordNeuronUsage(ctx.env, estimateChatNeurons(prefs.modelId ?? ctx.env.AI_MODEL, usage.promptTokens, usage.completionTokens), 'chat')
+  ]);
 
   const speech = await synthesizeSpeech(ctx.env, finalText);
   if (!speech.ok || !speech.audioBytes) {
@@ -339,13 +343,20 @@ async function runVoiceModeTurn(
     return;
   }
 
-  await ctx.api.deleteMessage(chatId, summaryPlaceholder.message_id).catch(() => {});
-  await ctx.api.sendVoice(chatId, new InputFile(speech.audioBytes, 'voice-mode.mp3'), replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(async () => {
-    await ctx.reply(finalText, replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
-  });
+  const sent = await ctx.api.sendVoice(
+    chatId,
+    new InputFile(speech.audioBytes, 'voice-mode.ogg'),
+    replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined
+  ).then(() => true).catch(() => false);
 
-  const summary = finalText.length > 36 ? `${finalText.slice(0, 36)}…` : finalText;
-  await ctx.reply(`语音摘要：${summary}`, replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(() => {});
+  if (!sent) {
+    await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, finalText).catch(() => {});
+    return;
+  }
+
+  await ctx.api.deleteMessage(chatId, summaryPlaceholder.message_id).catch(async () => {
+    await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, '· 语音回复已发送').catch(() => {});
+  });
 }
 
 async function downloadTelegramFile(ctx: BotContext, fileId: string) {
