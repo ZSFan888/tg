@@ -1,4 +1,5 @@
 import type { ChatMessage, Env } from '../types/env';
+import { getMaxTokensForModel } from '../config/models';
 
 
 function summarizeAiError(err: unknown, modelId: string): { userMessage: string; logDetail: Record<string, unknown> } {
@@ -85,6 +86,26 @@ function estimateTokensFromText(text: string): number {
 }
 
 
+
+function buildChatParams(messages: Array<{ role: string; content: string }>, modelId: string, stream = false) {
+  const maxTokens = getMaxTokensForModel(modelId);
+  const usesCompletionTokens = /@cf\/(zai-org\/glm-|moonshotai\/kimi-|openai\/gpt-oss-|nvidia\/nemotron-3-120b-a12b)/.test(modelId);
+
+  if (usesCompletionTokens) {
+    return {
+      messages,
+      stream,
+      max_completion_tokens: maxTokens
+    };
+  }
+
+  return {
+    messages,
+    stream,
+    max_tokens: maxTokens
+  };
+}
+
 export async function optimizeImagePrompt(
   env: Env,
   userPrompt: string
@@ -102,13 +123,10 @@ export async function optimizeImagePrompt(
 
   try {
     const modelId = env.AI_MODEL;
-    const result = await env.AI.run(modelId, {
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: 600
-    });
+    const result = await env.AI.run(modelId, buildChatParams([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ], modelId));
     const raw = readResponse(result).trim();
     const match = raw.match(/\{[\s\S]*\}/);
     if (match) {
@@ -145,7 +163,7 @@ export async function generateReply(
 
   try {
     const resolvedModelId = modelId ?? env.AI_MODEL;
-    const result = await env.AI.run(resolvedModelId, { messages });
+    const result = await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId));
     const output = readResponse(result).trim();
     const text = output || '我现在有点忙，请你换个问法再试一次。';
     const usage = readUsage(result) ?? {
@@ -206,7 +224,7 @@ export async function generateReplyStream(
 
   try {
     const resolvedModelId = modelId ?? env.AI_MODEL;
-    const result = await env.AI.run(resolvedModelId, { messages, stream: true });
+    const result = await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId, true));
 
     if (!(result instanceof ReadableStream)) {
       const fallback = readResponse(result).trim() || '我现在有点忙，请你换个问法再试一次。';
