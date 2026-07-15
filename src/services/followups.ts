@@ -1,5 +1,41 @@
 import type { ChatMessage, Env } from '../types/env';
-import { recordNeuronUsage, estimateChatNeurons } from '../storage/neurons-store';
+import { estimateChatNeurons, recordNeuronUsage } from '../storage/neurons-store';
+import { getMaxTokensForModel } from '../config/models';
+
+function buildChatParams(messages: ChatMessage[], modelId: string) {
+  const maxTokens = Math.min(512, getMaxTokensForModel(modelId));
+  const usesCompletionTokens = /@cf\/(zai-org\/glm-|moonshotai\/kimi-|openai\/gpt-oss-|nvidia\/nemotron-3-120b-a12b)/.test(modelId);
+
+  if (usesCompletionTokens) {
+    return {
+      messages,
+      max_completion_tokens: maxTokens
+    };
+  }
+
+  return {
+    messages,
+    max_tokens: maxTokens
+  };
+}
+
+function readResponse(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (!result || typeof result !== 'object') return '';
+
+  const data = result as Record<string, unknown>;
+  if (typeof data.response === 'string') return data.response;
+  if (typeof data.text === 'string') return data.text;
+  if (Array.isArray(data.choices) && data.choices.length > 0) {
+    const choice = data.choices[0] as Record<string, unknown>;
+    const message = choice?.message as Record<string, unknown> | undefined;
+    if (typeof message?.content === 'string') return message.content;
+  }
+  if (Array.isArray(data.result)) {
+    return data.result.map((item) => (typeof item === 'string' ? item : '')).join('').trim();
+  }
+  return '';
+}
 
 export async function generateFollowUps(
   env: Env,
@@ -7,6 +43,7 @@ export async function generateFollowUps(
   aiAnswer: string,
   modelId?: string
 ): Promise<string[]> {
+  const resolvedModelId = modelId ?? env.AI_MODEL;
   const prompt = `根据下面这轮问答，生成 3 个用户可能会追问的简短问题。要求：
 - 每个问题不超过 15 个字
 - 直接和上面的回答内容相关，不要泛泛而问
@@ -21,15 +58,13 @@ AI 回答：${aiAnswer.slice(0, 800)}`;
       { role: 'user', content: prompt }
     ];
 
-    const result = await env.AI.run(modelId ?? env.AI_MODEL, { messages });
-    const text = typeof result === 'object' && result && 'response' in result
-      ? String((result as { response: unknown }).response ?? '')
-      : String(result ?? '');
+    const result = await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId));
+    const text = readResponse(result).trim();
 
     const usageObj = (result as { usage?: { prompt_tokens?: number; completion_tokens?: number } })?.usage;
     const promptTokens = usageObj?.prompt_tokens ?? Math.ceil(prompt.length / 2.5);
-    const completionTokens = usageObj?.completion_tokens ?? Math.ceil(text.length / 2.5);
-    await recordNeuronUsage(env, estimateChatNeurons(modelId ?? env.AI_MODEL, promptTokens, completionTokens), 'chat');
+    const completionTokens = usageObj?.completion_tokens ?? Math.max(32, Math.ceil(text.length / 2.5));
+    await recordNeuronUsage(env, estimateChatNeurons(resolvedModelId, promptTokens, completionTokens), 'chat');
 
     const lines = text
       .split('\n')
