@@ -339,7 +339,9 @@ async function maybeSendVoiceReply(ctx: BotContext, chatId: number, userId: numb
   const prefs = await getUserPreferences(ctx.env, userId);
   if (!prefs.voiceReplyEnabled) return;
 
-  const speech = await synthesizeSpeech(ctx.env, text);
+  const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
+  const ttsModelId = selectedModel?.task === 'text_to_speech' ? selectedModel.id : '@cf/myshell-ai/melotts';
+  const speech = await synthesizeSpeech(ctx.env, text, 'ZH', ttsModelId);
   if (!speech.ok || !speech.audioBytes) return;
 
   await ctx.api.sendVoice(chatId, new InputFile(speech.audioBytes, 'reply.ogg'), replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(async () => {

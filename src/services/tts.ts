@@ -14,9 +14,9 @@ function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-export async function synthesizeSpeech(env: Env, text: string, lang = 'ZH'): Promise<SpeechResult> {
+export async function synthesizeSpeech(env: Env, text: string, lang = 'ZH', modelId = '@cf/myshell-ai/melotts'): Promise<SpeechResult> {
   try {
-    const result = await env.AI.run('@cf/myshell-ai/melotts', {
+    const result = await env.AI.run(modelId, {
       prompt: text.slice(0, 1200),
       lang
     });
