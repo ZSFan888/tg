@@ -1,6 +1,49 @@
 import type { ChatMessage, Env } from '../types/env';
 import { getMaxTokensForModel } from '../config/models';
 
+
+function summarizeAiError(err: unknown, modelId: string): { userMessage: string; logDetail: Record<string, unknown> } {
+  const raw = err instanceof Error ? err.message : String(err);
+  const statusMatch = raw.match(/(4\d\d|5\d\d)/);
+  const status = statusMatch ? Number(statusMatch[1]) : undefined;
+
+  let userMessage = '抱歉，AI 服务暂时出了点问题，请稍后再试。';
+  let category = 'unknown';
+
+  if (raw.includes('3036') || raw.includes('daily free allocation') || status === 429) {
+    category = 'account_limited';
+    userMessage = '抱歉，今日 AI 使用额度可能已用完，请稍后再试，或先切换到更轻量的模型。';
+  } else if (raw.includes('3040')) {
+    category = 'out_of_capacity';
+    userMessage = '抱歉，当前模型服务较繁忙，请稍后重试，或先切换到更轻量的模型。';
+  } else if (raw.includes('5007') || raw.includes('3042') || raw.includes('No such model') || raw.includes('Invalid model ID') || status === 404) {
+    category = 'model_not_found';
+    userMessage = `抱歉，当前模型暂时不可用（${modelId}），请切换到其他模型再试。`;
+  } else if (raw.includes('5018') || raw.includes('3041') || raw.includes('3023') || raw.includes('5016') || status === 403) {
+    category = 'forbidden';
+    userMessage = '抱歉，当前账号暂时无法使用这个模型，请切换到其他模型再试。';
+  } else if (raw.includes('3007') || raw.includes('3008') || raw.toLowerCase().includes('timeout') || status === 408) {
+    category = 'timeout';
+    userMessage = '抱歉，当前模型响应超时了，请稍后重试，或先切换到更轻量的模型。';
+  } else if (raw.includes('3006') || status === 413) {
+    category = 'request_too_large';
+    userMessage = '抱歉，这次对话内容有点长，超出了当前模型允许范围；请先清空上下文，或切换到更强的长上下文模型。';
+  } else if (raw.includes('5004') || raw.includes('3003') || raw.toLowerCase().includes('max_tokens') || raw.toLowerCase().includes('context') || status === 400) {
+    category = 'invalid_request';
+    userMessage = '抱歉，请求参数或上下文长度不适合当前模型；请换个模型，或先清空上下文后再试。';
+  }
+
+  return {
+    userMessage,
+    logDetail: {
+      modelId,
+      category,
+      status,
+      raw: raw.slice(0, 300)
+    }
+  };
+}
+
 function trimMessages(messages: ChatMessage[]) {
   const budget = 6000;
   const picked: ChatMessage[] = [];
@@ -80,9 +123,10 @@ export async function generateReply(
     };
     return { text, usage };
   } catch (err) {
-    console.error('AI generation failed:', err);
+    const summary = summarizeAiError(err, modelId ?? env.AI_MODEL);
+    console.error('AI generation failed:', summary.logDetail);
     return {
-      text: '抱歉，AI 服务暂时出了点问题，请稍后再试。',
+      text: summary.userMessage,
       usage: { promptTokens: 0, completionTokens: 0 }
     };
   }
