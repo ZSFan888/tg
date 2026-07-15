@@ -123,9 +123,9 @@ function dataUriToBytes(dataUri: string): ImageGenerationResult {
   return { ok: true, imageBytes: bytes, mimeType };
 }
 
-export async function generateImage(env: Env, prompt: string): Promise<ImageGenerationResult> {
+export async function generateImage(env: Env, prompt: string, modelId = '@cf/black-forest-labs/flux-1-schnell'): Promise<ImageGenerationResult> {
   try {
-    const result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
+    const result = await env.AI.run(modelId, {
       prompt,
       steps: 4
     });
@@ -144,14 +144,14 @@ export interface ImageEditInput {
   mimeType?: string;
 }
 
-export async function editImage(env: Env, prompt: string, input: ImageEditInput): Promise<ImageGenerationResult> {
+export async function editImage(env: Env, prompt: string, input: ImageEditInput, modelId = '@cf/black-forest-labs/flux-2-klein-9b'): Promise<ImageGenerationResult> {
   try {
     const form = new FormData();
     form.set('prompt', prompt);
     const arrayBuffer = input.bytes.buffer.slice(input.bytes.byteOffset, input.bytes.byteOffset + input.bytes.byteLength) as ArrayBuffer;
     form.set('input_image_0', new Blob([arrayBuffer], { type: input.mimeType ?? 'image/jpeg' }), 'input-image');
 
-    const response = await (env.AI.run as any)('@cf/black-forest-labs/flux-2-klein-9b', { multipart: form });
+    const response = await (env.AI.run as any)(modelId, { multipart: form });
 
     const parsed = await parseImageResult(response, 'image/jpeg');
     if (!parsed.ok && parsed.error === 'unsupported_response') {

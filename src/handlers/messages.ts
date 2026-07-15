@@ -455,9 +455,13 @@ export async function runImageTurn(
     return;
   }
 
+  const prefs = await getUserPreferences(ctx.env, userId);
+  const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
+  const imageModelId = selectedModel?.task === 'image' ? selectedModel.id : '@cf/black-forest-labs/flux-1-schnell';
+
   const placeholder = await ctx.api.sendMessage(chatId, '· 正在优化提示词并生成图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
   const optimized = await optimizeImagePrompt(ctx.env, prompt);
-  const image = await generateImage(ctx.env, optimized.optimizedPrompt);
+  const image = await generateImage(ctx.env, optimized.optimizedPrompt, imageModelId);
 
   if (!image.ok || !image.imageBytes) {
     const reason = image.errorMessage ? `\n原因：${image.errorMessage}` : '';
@@ -488,6 +492,10 @@ export async function runImageEditTurn(
     return;
   }
 
+  const prefs = await getUserPreferences(ctx.env, userId);
+  const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
+  const imageModelId = selectedModel?.task === 'image' ? selectedModel.id : '@cf/black-forest-labs/flux-1-schnell';
+
   const placeholder = await ctx.api.sendMessage(chatId, '· 正在优化重绘需求并生成图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
   const optimized = await optimizeImagePrompt(ctx.env, prompt);
   const source = await downloadTelegramFile(ctx, sourceFileId);
@@ -496,7 +504,7 @@ export async function runImageEditTurn(
     return;
   }
 
-  const image = await editImage(ctx.env, optimized.optimizedPrompt, source);
+  const image = await editImage(ctx.env, optimized.optimizedPrompt, source, imageModelId);
   if (!image.ok || !image.imageBytes) {
     const reason = image.errorMessage ? `\n原因：${image.errorMessage}` : '';
     await ctx.api.editMessageText(chatId, placeholder.message_id, `抱歉，图片重绘失败了，请换个修改要求再试。${reason}`).catch(() => {});
