@@ -50,8 +50,9 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
     const models = getModelsByTask(taskKey);
     const keyboard = new InlineKeyboard();
-    for (const model of models) {
-      keyboard.text(model.label, `model:${model.key}`).row();
+    for (const [index, model] of models.entries()) {
+      const prefix = index === 0 ? '★ ' : `${index + 1}. `;
+      keyboard.text(`${prefix}${model.label}`, `model:${model.key}`).row();
     }
     keyboard.text('« 返回任务类型', 'menu:model');
 

@@ -16,7 +16,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-export async function transcribeAudio(env: Env, fileUrl: string): Promise<TranscriptionResult> {
+export async function transcribeAudio(env: Env, fileUrl: string, modelId = '@cf/openai/whisper-large-v3-turbo'): Promise<TranscriptionResult> {
   try {
     const audioRes = await fetch(fileUrl);
     if (!audioRes.ok) {
@@ -30,7 +30,7 @@ export async function transcribeAudio(env: Env, fileUrl: string): Promise<Transc
 
     const base64Audio = arrayBufferToBase64(buffer);
 
-    const result = await env.AI.run('@cf/openai/whisper-large-v3-turbo', {
+    const result = await env.AI.run(modelId, {
       audio: base64Audio,
       task: 'transcribe'
     });

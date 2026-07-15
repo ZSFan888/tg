@@ -14,6 +14,7 @@ import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
 import { sanitizeMarkdown } from '../utils/markdown';
 import { transcribeAudio } from '../services/transcribe';
+import { getModelById } from '../config/models';
 import { synthesizeSpeech } from '../services/tts';
 import { generateImage, editImage } from '../services/image';
 import { resolveSystemPrompt } from '../config/personas';
@@ -642,7 +643,10 @@ export function registerMessages(bot: Bot<BotContext>) {
       }
 
       const fileUrl = `https://api.telegram.org/file/bot${ctx.env.BOT_TOKEN}/${file.file_path}`;
-      const transcription = await transcribeAudio(ctx.env, fileUrl);
+      const sttPrefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const selectedModel = sttPrefs.modelId ? getModelById(sttPrefs.modelId) : null;
+    const sttModelId = selectedModel?.task === 'speech_to_text' ? selectedModel.id : '@cf/openai/whisper-large-v3-turbo';
+    const transcription = await transcribeAudio(ctx.env, fileUrl, sttModelId);
 
       statusActive = false;
       clearInterval(statusInterval);
