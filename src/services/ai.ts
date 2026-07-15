@@ -1,5 +1,4 @@
 import type { ChatMessage, Env } from '../types/env';
-import { getMaxTokensForModel } from '../config/models';
 
 
 function summarizeAiError(err: unknown, modelId: string): { userMessage: string; logDetail: Record<string, unknown> } {
@@ -42,20 +41,6 @@ function summarizeAiError(err: unknown, modelId: string): { userMessage: string;
       raw: raw.slice(0, 300)
     }
   };
-}
-
-function trimMessages(messages: ChatMessage[]) {
-  const budget = 6000;
-  const picked: ChatMessage[] = [];
-  let total = 0;
-
-  for (const message of [...messages].reverse()) {
-    total += message.content.length;
-    if (total > budget) break;
-    picked.push(message);
-  }
-
-  return picked.reverse();
 }
 
 function readResponse(result: unknown): string {
@@ -152,15 +137,15 @@ export async function generateReply(
   systemPrompt: string,
   modelId?: string
 ): Promise<{ text: string; usage: TokenUsage }> {
-  const messages = trimMessages([
+  const messages = [
     { role: 'system', content: systemPrompt },
     ...history,
     { role: 'user', content: input }
-  ]);
+  ];
 
   try {
     const resolvedModelId = modelId ?? env.AI_MODEL;
-    const result = await env.AI.run(resolvedModelId, { messages, max_tokens: getMaxTokensForModel(resolvedModelId) });
+    const result = await env.AI.run(resolvedModelId, { messages });
     const output = readResponse(result).trim();
     const text = output || '我现在有点忙，请你换个问法再试一次。';
     const usage = readUsage(result) ?? {
@@ -213,15 +198,15 @@ export async function generateReplyStream(
   callbacks: StreamCallbacks,
   modelId?: string
 ): Promise<{ text: string; usage: TokenUsage }> {
-  const messages = trimMessages([
+  const messages = [
     { role: 'system', content: systemPrompt },
     ...history,
     { role: 'user', content: input }
-  ]);
+  ];
 
   try {
     const resolvedModelId = modelId ?? env.AI_MODEL;
-    const result = await env.AI.run(resolvedModelId, { messages, stream: true, max_tokens: getMaxTokensForModel(resolvedModelId) });
+    const result = await env.AI.run(resolvedModelId, { messages, stream: true });
 
     if (!(result instanceof ReadableStream)) {
       const fallback = readResponse(result).trim() || '我现在有点忙，请你换个问法再试一次。';
