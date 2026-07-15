@@ -19,6 +19,7 @@ import { synthesizeSpeech } from '../services/tts';
 import { generateImage, editImage } from '../services/image';
 import { analyzeImage } from '../services/vision';
 import { translateText } from '../services/translation';
+import { classifyText } from '../services/classification';
 import { resolveSystemPrompt } from '../config/personas';
 import { recordNeuronUsage, estimateChatNeurons, WHISPER_NEURONS_PER_MINUTE } from '../storage/neurons-store';
 import { recordActivityAndCount, shouldAlertAndMark } from '../storage/anomaly-store';
@@ -59,13 +60,20 @@ function parseTranslationTarget(text: string): string | null {
   return null;
 }
 
-function detectAutoTask(text: string): 'image' | 'translation' | 'chat' {
+function detectClassificationIntent(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  const keywords = ['情绪分析', '情感分析', '正面还是负面', '判断情绪', '分类这句话', 'sentiment', 'positive or negative', 'classify this text'];
+  return keywords.some((kw) => normalized.includes(kw));
+}
+
+function detectAutoTask(text: string): 'image' | 'translation' | 'classification' | 'chat' {
   const normalized = text.trim().toLowerCase();
   const imageKeywords = [
     '画', '画一张', '生成图片', '生成一张图', '生图', '做一张图', '帮我画', '出图', '海报', '封面图', 'logo', '插画',
     'draw', 'generate image', 'create image', 'make an image', 'illustration', 'poster', 'logo', 'thumbnail'
   ];
   if (parseTranslationTarget(text)) return 'translation';
+  if (detectClassificationIntent(text)) return 'classification';
   return imageKeywords.some((kw) => normalized.includes(kw)) ? 'image' : 'chat';
 }
 
@@ -558,6 +566,27 @@ export async function runImageEditTurn(
 
 
 
+
+async function runClassificationTurn(
+  ctx: BotContext,
+  chatId: number,
+  userId: number,
+  text: string,
+  replyToMessageId: number | undefined
+) {
+  const prefs = await getUserPreferences(ctx.env, userId);
+  const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
+  const modelId = selectedModel?.task === 'classification' ? selectedModel.id : '@cf/huggingface/distilbert-sst-2-int8';
+  const placeholder = await ctx.api.sendMessage(chatId, '· 正在分类分析…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const result = await classifyText(ctx.env, text, modelId);
+  if (!result.ok || !result.text) {
+    await ctx.api.editMessageText(chatId, placeholder.message_id, '抱歉，分类分析失败了，请换个说法再试。').catch(() => {});
+    return;
+  }
+  await ctx.api.editMessageText(chatId, placeholder.message_id, `分类结果：
+${result.text}`).catch(() => {});
+}
+
 async function runTranslationTurn(
   ctx: BotContext,
   chatId: number,
@@ -681,6 +710,11 @@ export function registerMessages(bot: Bot<BotContext>) {
         const targetLang = parseTranslationTarget(text) ?? 'en';
         const questionMsg = await ctx.reply(`已自动识别为翻译需求：${text}`);
         await runTranslationTurn(ctx, ctx.chat.id, ctx.from.id, text, targetLang, questionMsg.message_id);
+        return;
+      }
+      if (detectedTask === 'classification') {
+        const questionMsg = await ctx.reply(`已自动识别为分类/情绪分析需求：${text}`);
+        await runClassificationTurn(ctx, ctx.chat.id, ctx.from.id, text, questionMsg.message_id);
         return;
       }
     }
