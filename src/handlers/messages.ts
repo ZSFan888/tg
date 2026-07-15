@@ -40,6 +40,13 @@ const REVEAL_CATCHUP_RATIO = 0.35;
 const REVEAL_MIN_CHARS = 2;
 
 
+
+function detectPhotoIntent(text: string): 'vision' | 'image_edit' {
+  const normalized = text.trim().toLowerCase();
+  const visionKeywords = ['这是什么', '图里是什么', '帮我看图', '描述这张图', '识别这张图', '分析这张图', 'what is in this image', 'describe this image', 'analyze this image'];
+  return visionKeywords.some((kw) => normalized.includes(kw)) ? 'vision' : 'image_edit';
+}
+
 function detectAutoTask(text: string): 'image' | 'chat' {
   const normalized = text.trim().toLowerCase();
   const imageKeywords = [
