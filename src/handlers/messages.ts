@@ -14,7 +14,7 @@ import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
 import { sanitizeMarkdown } from '../utils/markdown';
 import { transcribeAudio } from '../services/transcribe';
-import { getModelById } from '../config/models';
+import { getModelById, pickChatModelByIntent } from '../config/models';
 import { synthesizeSpeech } from '../services/tts';
 import { generateImage, editImage } from '../services/image';
 import { analyzeImage } from '../services/vision';
@@ -401,6 +401,10 @@ async function runVoiceModeTurn(
     getUserPreferences(ctx.env, userId),
     getChatHistory(ctx.env, chatId)
   ]);
+  const selectedChatModel = prefs.modelId ? getModelById(prefs.modelId) : null;
+  const voiceChatModelId = selectedChatModel?.task === 'chat' ? selectedChatModel.id : pickChatModelByIntent(text).id;
+  const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
+  const modelId = selectedModel?.task === 'chat' ? selectedModel.id : pickChatModelByIntent(text).id;
   const { prompt: resolvedBasePrompt } = resolveSystemPrompt(prefs);
   const voicePrompt = `${resolvedBasePrompt}
 
@@ -411,7 +415,7 @@ async function runVoiceModeTurn(
       onChunk: async () => {},
       onDone: async () => {},
       onError: async () => {}
-    }, prefs.modelId ?? ctx.env.AI_MODEL);
+    }, modelId);
 
     const finalText = extractFinalAnswer(finalTextRaw);
   if (!finalText) {

@@ -9,6 +9,8 @@ export interface ModelOption {
   task: ModelTask;
   deprecated?: boolean;
   recommendedRank: number;
+  speedRank?: number;
+  qualityRank?: number;
   maxTokens: number;
 }
 
@@ -54,19 +56,19 @@ export const PROVIDERS: ProviderGroup[] = [
 ];
 
 export const MODELS: ModelOption[] = [
-  { key: 'fast', id: '@cf/meta/llama-3.2-1b-instruct', label: 'Llama 3.2 1B（默认·最快）', note: '响应最快，适合日常聊天', provider: 'meta', task: 'chat', recommendedRank: 3, maxTokens: 8000 },
-  { key: 'balanced', id: '@cf/meta/llama-3.2-3b-instruct', label: 'Llama 3.2 3B（均衡）', note: '速度和质量更均衡', provider: 'meta', task: 'chat', recommendedRank: 1, maxTokens: 8000 },
-  { key: 'llama8b', id: '@cf/meta/llama-3.1-8b-instruct-fast', label: 'Llama 3.1 8B', note: '更强的通用聊天模型', provider: 'meta', task: 'chat', recommendedRank: 2, maxTokens: 8000 },
-  { key: 'scout', id: '@cf/meta/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B', note: '综合能力更强', provider: 'meta', task: 'chat', recommendedRank: 4, maxTokens: 8000 },
-  { key: 'llama70b', id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', label: 'Llama 3.3 70B', note: '高质量聊天与推理', provider: 'meta', task: 'chat', recommendedRank: 8, maxTokens: 6000 },
-  { key: 'qwen30b', id: '@cf/qwen/qwen3-30b-a3b-fp8', label: 'Qwen3 30B', note: '中文表现出色', provider: 'qwen', task: 'chat', recommendedRank: 5, maxTokens: 8000 },
-  { key: 'qwen-coder-32b', id: '@cf/qwen/qwen2.5-coder-32b-instruct', label: 'Qwen2.5 Coder 32B', note: '代码能力强化', provider: 'qwen', task: 'chat', recommendedRank: 7, maxTokens: 8000 },
-  { key: 'qwq32b', id: '@cf/qwen/qwq-32b', label: 'QwQ 32B', note: '推理增强', provider: 'qwen', task: 'chat', recommendedRank: 9, maxTokens: 6000 },
-  { key: 'mistral24b', id: '@cf/mistralai/mistral-small-3.1-24b-instruct', label: 'Mistral Small 3.1 24B', note: '逻辑较强', provider: 'mistral', task: 'chat', recommendedRank: 6, maxTokens: 8000 },
-  { key: 'gemma4-26b', id: '@cf/google/gemma-4-26b-a4b-it', label: 'Gemma 4 26B', note: 'Google 开放模型', provider: 'google', task: 'chat', recommendedRank: 10, maxTokens: 8000 },
-  { key: 'gptoss120b', id: '@cf/openai/gpt-oss-120b', label: 'GPT-OSS 120B', note: '复杂任务更强', provider: 'openai', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
-  { key: 'gptoss20b', id: '@cf/openai/gpt-oss-20b', label: 'GPT-OSS 20B', note: '更快的开源 OpenAI 模型', provider: 'openai', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
-  { key: 'deepseek-r1-32b', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', label: 'DeepSeek R1 Distill 32B', note: '数学逻辑更强', provider: 'deepseek', task: 'chat', recommendedRank: 0, maxTokens: 6000 },
+  { key: 'fast', id: '@cf/meta/llama-3.2-1b-instruct', label: 'Llama 3.2 1B（默认·最快）', note: '响应最快，适合日常聊天', provider: 'meta', task: 'chat', recommendedRank: 3, speedRank: 1, qualityRank: 8, maxTokens: 8000 },
+  { key: 'balanced', id: '@cf/meta/llama-3.2-3b-instruct', label: 'Llama 3.2 3B（均衡）', note: '速度和质量更均衡', provider: 'meta', task: 'chat', recommendedRank: 1, speedRank: 2, qualityRank: 7, maxTokens: 8000 },
+  { key: 'llama8b', id: '@cf/meta/llama-3.1-8b-instruct-fast', label: 'Llama 3.1 8B', note: '更强的通用聊天模型', provider: 'meta', task: 'chat', recommendedRank: 2, speedRank: 3, qualityRank: 6, maxTokens: 8000 },
+  { key: 'scout', id: '@cf/meta/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B', note: '综合能力更强', provider: 'meta', task: 'chat', recommendedRank: 4, speedRank: 5, qualityRank: 4, maxTokens: 8000 },
+  { key: 'llama70b', id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', label: 'Llama 3.3 70B', note: '高质量聊天与推理', provider: 'meta', task: 'chat', recommendedRank: 8, speedRank: 10, qualityRank: 1, maxTokens: 6000 },
+  { key: 'qwen30b', id: '@cf/qwen/qwen3-30b-a3b-fp8', label: 'Qwen3 30B', note: '中文表现出色', provider: 'qwen', task: 'chat', recommendedRank: 5, speedRank: 6, qualityRank: 5, maxTokens: 8000 },
+  { key: 'qwen-coder-32b', id: '@cf/qwen/qwen2.5-coder-32b-instruct', label: 'Qwen2.5 Coder 32B', note: '代码能力强化', provider: 'qwen', task: 'chat', recommendedRank: 7, speedRank: 7, qualityRank: 3, maxTokens: 8000 },
+  { key: 'qwq32b', id: '@cf/qwen/qwq-32b', label: 'QwQ 32B', note: '推理增强', provider: 'qwen', task: 'chat', recommendedRank: 9, speedRank: 11, qualityRank: 2, maxTokens: 6000 },
+  { key: 'mistral24b', id: '@cf/mistralai/mistral-small-3.1-24b-instruct', label: 'Mistral Small 3.1 24B', note: '逻辑较强', provider: 'mistral', task: 'chat', recommendedRank: 6, speedRank: 8, qualityRank: 5, maxTokens: 8000 },
+  { key: 'gemma4-26b', id: '@cf/google/gemma-4-26b-a4b-it', label: 'Gemma 4 26B', note: 'Google 开放模型', provider: 'google', task: 'chat', recommendedRank: 10, speedRank: 9, qualityRank: 9, maxTokens: 8000 },
+  { key: 'gptoss120b', id: '@cf/openai/gpt-oss-120b', label: 'GPT-OSS 120B', note: '复杂任务更强', provider: 'openai', task: 'chat', recommendedRank: 11, speedRank: 4, qualityRank: 2, maxTokens: 8000 },
+  { key: 'gptoss20b', id: '@cf/openai/gpt-oss-20b', label: 'GPT-OSS 20B', note: '更快的开源 OpenAI 模型', provider: 'openai', task: 'chat', recommendedRank: 12, speedRank: 4, qualityRank: 4, maxTokens: 8000 },
+  { key: 'deepseek-r1-32b', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', label: 'DeepSeek R1 Distill 32B', note: '数学逻辑更强', provider: 'deepseek', task: 'chat', recommendedRank: 13, speedRank: 12, qualityRank: 3, maxTokens: 6000 },
   { key: 'kimi-k2-6', id: '@cf/moonshotai/kimi-k2.6', label: 'Kimi K2.6', note: '长上下文聊天', provider: 'moonshot', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
   { key: 'kimi-k2-7-code', id: '@cf/moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code', note: '代码优化版本', provider: 'moonshot', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
   { key: 'glm-4-7-flash', id: '@cf/zai-org/glm-4.7-flash', label: 'GLM-4.7 Flash', note: '快速多语言聊天', provider: 'zhipu', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
@@ -126,4 +128,23 @@ export function getMaxTokensForModel(id?: string): number {
   if (!id) return DEFAULT_MAX_TOKENS;
   const model = MODELS.find((m) => m.id === id);
   return model?.maxTokens ?? DEFAULT_MAX_TOKENS;
+}
+
+
+export function getRecommendedModelForTask(task: ModelTask): ModelOption {
+  return getModelsByTask(task)[0] ?? MODELS[0];
+}
+
+export function pickChatModelByIntent(input: string): ModelOption {
+  const text = input.toLowerCase();
+  const hardKeywords = ['数学', '推理', '证明', '算法', '代码', 'debug', 'bug', 'sql', 'python', 'typescript', '复杂', '分析'];
+  const fastKeywords = ['一句话', '简短', '快速', '马上', '简单问答'];
+  const chatModels = getModelsByTask('chat');
+  if (fastKeywords.some((kw) => text.includes(kw))) {
+    return [...chatModels].sort((a, b) => (a.speedRank ?? 999) - (b.speedRank ?? 999))[0] ?? chatModels[0];
+  }
+  if (hardKeywords.some((kw) => text.includes(kw)) || input.length > 500) {
+    return [...chatModels].sort((a, b) => (a.qualityRank ?? 999) - (b.qualityRank ?? 999))[0] ?? chatModels[0];
+  }
+  return getRecommendedModelForTask('chat');
 }
