@@ -14,7 +14,7 @@ import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
 import { sanitizeMarkdown } from '../utils/markdown';
 import { transcribeAudio } from '../services/transcribe';
-import { getModelById, pickChatModelByIntent, pickImageModelByIntent } from '../config/models';
+import { getModelById, pickChatModelByIntent, pickImageModelByIntent, pickVisionModelByIntent } from '../config/models';
 import { synthesizeSpeech } from '../services/tts';
 import { generateImage, editImage } from '../services/image';
 import { analyzeImage } from '../services/vision';
@@ -596,7 +596,7 @@ async function runVisionTurn(
   const fileUrl = `https://api.telegram.org/file/bot${ctx.env.BOT_TOKEN}/${file.file_path}`;
   const prefs = await getUserPreferences(ctx.env, userId);
   const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
-  const visionModelId = selectedModel?.task === 'vision' ? selectedModel.id : '@cf/llava-hf/llava-1.5-7b-hf';
+  const visionModelId = selectedModel?.task === 'vision' ? selectedModel.id : pickVisionModelByIntent(prompt).id;
 
   const placeholder = await ctx.api.sendMessage(chatId, '· 正在分析图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
   const result = await analyzeImage(ctx.env, fileUrl, prompt, visionModelId);

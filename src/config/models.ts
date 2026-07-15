@@ -163,3 +163,18 @@ export function pickImageModelByIntent(input: string): ModelOption {
   }
   return getRecommendedModelForTask('image');
 }
+
+
+export function pickVisionModelByIntent(input: string): ModelOption {
+  const text = input.toLowerCase();
+  const visionModels = getModelsByTask('vision');
+  const deepAnalysisKeywords = ['详细分析', '分析原因', '逐步分析', '识别细节', '比较', '解释为什么', 'analyze', 'compare', 'explain'];
+  const simpleKeywords = ['这是什么', '图里有什么', '帮我看看', '描述一下', 'what is this', 'what is in this image', 'describe'];
+  if (deepAnalysisKeywords.some((kw) => text.includes(kw)) || input.length > 120) {
+    return visionModels.find((m) => m.key === 'llava-7b') ?? visionModels[0];
+  }
+  if (simpleKeywords.some((kw) => text.includes(kw))) {
+    return visionModels.find((m) => m.key === 'moondream') ?? visionModels[0];
+  }
+  return getRecommendedModelForTask('vision');
+}
