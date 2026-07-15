@@ -166,6 +166,19 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     );
   });
 
+  bot.callbackQuery('menu:version', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const sha = ctx.env.CF_PAGES_COMMIT_SHA;
+    const branch = ctx.env.CF_PAGES_BRANCH;
+    const shortSha = sha ? sha.slice(0, 7) : '未知（本地/未部署）';
+    const lines = [
+      `· 当前版本（git commit）：${shortSha}`,
+      branch ? `· 分支：${branch}` : undefined,
+      sha ? `https://github.com/ZSFan888/tg/commit/${sha}` : undefined
+    ].filter((line): line is string => Boolean(line));
+    await ctx.reply(lines.join('\n'));
+  });
+
   bot.callbackQuery('menu:help', async (ctx) => {
     await ctx.answerCallbackQuery();
 

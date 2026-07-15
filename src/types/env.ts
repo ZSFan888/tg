@@ -1,5 +1,8 @@
 export interface Env {
   BOT_TOKEN: string;
+  // Cloudflare Pages 在运行时自动注入的部署元信息，用于查看当前版本对应的 git commit。
+  CF_PAGES_COMMIT_SHA?: string;
+  CF_PAGES_BRANCH?: string;
   TELEGRAM_WEBHOOK_SECRET: string;
   BOT_WEBHOOK_PATH: string;
   ALLOWED_USER_IDS?: string;

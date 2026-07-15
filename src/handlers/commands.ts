@@ -51,7 +51,9 @@ export function registerCommands(bot: Bot<BotContext>) {
 .text('我的 ID', 'menu:myid')
       .row()
       .text('系统状态', 'menu:ping')
-      .text('帮助说明', 'menu:help');
+      .text('帮助说明', 'menu:help')
+      .row()
+      .text('版本号', 'menu:version');
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
       keyboard.row().text('管理员选项', 'menu:admin');
@@ -89,6 +91,18 @@ export function registerCommands(bot: Bot<BotContext>) {
 
   bot.command('chat', async (ctx) => {
     await ctx.reply('进入聊天模式，直接发送你的问题即可。');
+  });
+
+  bot.command('version', async (ctx) => {
+    const sha = ctx.env.CF_PAGES_COMMIT_SHA;
+    const branch = ctx.env.CF_PAGES_BRANCH;
+    const shortSha = sha ? sha.slice(0, 7) : '未知（本地/未部署）';
+    const lines = [
+      '· 当前版本（git commit）：' + shortSha,
+      branch ? '· 分支：' + branch : undefined,
+      sha ? 'https://github.com/ZSFan888/tg/commit/' + sha : undefined
+    ].filter((line): line is string => Boolean(line));
+    await ctx.reply(lines.join('\n'));
   });
 
   bot.command('settings', async (ctx) => {
