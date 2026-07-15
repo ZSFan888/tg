@@ -118,7 +118,10 @@ export async function runAiTurn(
   const prompt = basePrompt;
 
   let lastEditedText = '';
-  let lastEditAt = 0;
+  // 初始化为当前时间而不是 0，避免第一次 revealTick 因为
+  // "now - lastEditAt" 差值过大而跳过节流检查，抢在占位消息动画之前
+  // 就把消息编辑成空文本+光标（只剩一个小方块），和「思考中...」动画打架。
+  let lastEditAt = Date.now();
   let editInFlight = false;
 
   async function flushEdit(displayText: string, force = false) {
@@ -176,6 +179,9 @@ export async function runAiTurn(
 
   async function revealTick(force = false) {
     if (revealTicking) return;
+    // 还没收到任何内容时不要动占位消息，让「思考中...」动画继续显示，
+    // 避免过早把占位文字替换成空文本+光标（只剩一个小方块）。
+    if (targetText.length === 0 && !streamDone) return;
     revealTicking = true;
     try {
       if (revealedLength < targetText.length) {
