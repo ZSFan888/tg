@@ -355,16 +355,6 @@ export function registerMessages(bot: Bot<BotContext>) {
 
     const messageId = ctx.message?.message_id ?? ctx.editedMessage?.message_id;
 
-    if (!isEdited && text.toLowerCase().startsWith('/image ')) {
-      const prompt = text.slice(7).trim();
-      if (!prompt) {
-        await ctx.reply('用法：/image 你的图片描述');
-        return;
-      }
-      await runImageTurn(ctx, ctx.chat.id, ctx.from.id, prompt, messageId);
-      return;
-    }
-
     await runAiTurn(ctx, ctx.chat.id, ctx.from.id, text, messageId, { editedNotice: isEdited });
   });
 

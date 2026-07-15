@@ -2,7 +2,7 @@ import { InlineKeyboard, InputFile } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences } from '../storage/preferences-store';
+import { getUserPreferences, setVoiceReplyEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
@@ -12,6 +12,7 @@ import { isAdmin } from '../utils/access';
 import { getAllKnownUsers } from '../storage/users-store';
 import { getGlobalStats, getStatsHistory, getModelStats } from '../storage/usage-store';
 import { banUser, unbanUser } from '../storage/ban-store';
+import { runImageTurn } from './messages';
 import { buildUsageChartUrl } from '../services/chart';
 import {
   getTodayNeuronUsage,
@@ -116,12 +117,21 @@ export function registerCommands(bot: Bot<BotContext>) {
   });
 
   bot.command('image', async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
     const raw = ctx.match?.trim() ?? '';
     if (!raw) {
       await ctx.reply('用法：/image 一只戴墨镜的橘猫坐在咖啡馆窗边');
       return;
     }
-    await ctx.reply(`已收到生图请求：${raw}\n也可以直接点击开始菜单里的 AI 生图按钮。`);
+    await runImageTurn(ctx, ctx.chat.id, ctx.from.id, raw, ctx.message?.message_id);
+  });
+
+  bot.command('voice', async (ctx) => {
+    if (!ctx.from) return;
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const next = !prefs.voiceReplyEnabled;
+    await setVoiceReplyEnabled(ctx.env, ctx.from.id, next);
+    await ctx.reply(next ? '语音回复：已开启\n之后我会在文字回答后额外发一条语音。' : '语音回复：已关闭\n恢复为只输出文字回答。');
   });
 
   bot.command('usage', async (ctx) => {
