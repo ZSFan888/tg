@@ -46,6 +46,7 @@ export interface UserPreferences {
   voiceReplyEnabled?: boolean;
   voiceModeEnabled?: boolean;
   autoTaskRouting?: boolean;
+  debugRoutingEnabled?: boolean;
   updatedAt: number;
 }
 

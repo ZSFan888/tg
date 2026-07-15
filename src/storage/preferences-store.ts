@@ -70,3 +70,12 @@ export async function setAutoTaskRouting(env: Env, userId: number | string, enab
   });
   return prefs;
 }
+
+export async function setDebugRoutingEnabled(env: Env, userId: number | string, enabled: boolean) {
+  const existing = await getUserPreferences(env, userId);
+  const prefs: UserPreferences = { ...existing, debugRoutingEnabled: enabled, updatedAt: Date.now() };
+  await env.BOT_KV.put(key(userId), JSON.stringify(prefs), {
+    expirationTtl: 60 * 60 * 24 * 90
+  });
+  return prefs;
+}

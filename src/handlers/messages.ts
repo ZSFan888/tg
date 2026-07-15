@@ -567,6 +567,14 @@ export async function runImageEditTurn(
 
 
 
+
+async function maybeSendRoutingDebug(ctx: BotContext, chatId: number, replyToMessageId: number | undefined, prefs: { debugRoutingEnabled?: boolean }, lines: string[]) {
+  if (!prefs.debugRoutingEnabled) return;
+  const message = `自动路由调试：
+${lines.map((line) => `- ${line}`).join('\n')}`;
+  await ctx.reply(message, replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(() => {});
+}
+
 async function runClassificationTurn(
   ctx: BotContext,
   chatId: number,
@@ -703,22 +711,27 @@ export function registerMessages(bot: Bot<BotContext>) {
       const detectedTask = detectAutoTask(text);
       if (detectedTask === 'image') {
         const questionMsg = await ctx.reply(`已自动识别为生图需求：${text}`);
+        await maybeSendRoutingDebug(ctx, ctx.chat.id, questionMsg.message_id, prefs, ['任务：image', `原因：命中生图关键词`, `模型：${pickImageModelByIntent(text).label}`]);
         await runImageTurn(ctx, ctx.chat.id, ctx.from.id, text, questionMsg.message_id);
         return;
       }
       if (detectedTask === 'translation') {
         const targetLang = parseTranslationTarget(text) ?? 'en';
         const questionMsg = await ctx.reply(`已自动识别为翻译需求：${text}`);
+        await maybeSendRoutingDebug(ctx, ctx.chat.id, questionMsg.message_id, prefs, ['任务：translation', `目标语言：${targetLang}`]);
         await runTranslationTurn(ctx, ctx.chat.id, ctx.from.id, text, targetLang, questionMsg.message_id);
         return;
       }
       if (detectedTask === 'classification') {
         const questionMsg = await ctx.reply(`已自动识别为分类/情绪分析需求：${text}`);
+        await maybeSendRoutingDebug(ctx, ctx.chat.id, questionMsg.message_id, prefs, ['任务：classification', '原因：命中情绪/分类关键词']);
         await runClassificationTurn(ctx, ctx.chat.id, ctx.from.id, text, questionMsg.message_id);
         return;
       }
     }
 
+    const autoChatModel = (!prefs.modelId || getModelById(prefs.modelId).task !== 'chat') ? pickChatModelByIntent(text) : null;
+    await maybeSendRoutingDebug(ctx, ctx.chat.id, messageId, prefs, autoChatModel ? ['任务：chat', `模型：${autoChatModel.label}`, '原因：根据聊天内容自动挑选 chat 模型'] : ['任务：chat', '模型：手动锁定的 chat 模型']);
     await runAiTurn(ctx, ctx.chat.id, ctx.from.id, text, messageId, { editedNotice: isEdited });
   });
 
