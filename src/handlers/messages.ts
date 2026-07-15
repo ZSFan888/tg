@@ -21,8 +21,20 @@ import { recordActivityAndCount, shouldAlertAndMark } from '../storage/anomaly-s
 import { parseCsvNumbers } from '../utils/access';
 import type { ChatMessage } from '../types/env';
 
-const EDIT_INTERVAL_MS = 1400;
+// Telegram 对同一条消息的 editMessageText 大约限制在每秒 1 次左右，
+// 太频繁会触发 429。这里设为略高于 1 秒的安全值，在不被限流的前提下
+// 尽量提高刷新频率，让文字看起来更连续。
+const EDIT_INTERVAL_MS = 1100;
 const TYPING_CURSOR = ' ▌';
+
+// 把「网络一次性吐出一大段文字」的效果，拆成多次小幅增量显示，
+// 模拟打字机逐字出现的效果，而不是一顿一顿地跳字。
+const REVEAL_TICK_MS = 220;
+// 每次最多追赶已收到内容差距的这个比例，差距越大追得越快，
+// 保证不会因为追字速度太慢导致长回答显示严重滞后于实际生成进度。
+const REVEAL_CATCHUP_RATIO = 0.35;
+// 无论差距大小，每次至少往前露出这么多字符，避免长时间停滞不前。
+const REVEAL_MIN_CHARS = 2;
 
 interface RunAiTurnOptions {
   historyOverride?: ChatMessage[];
@@ -130,29 +142,68 @@ export async function runAiTurn(
     }
   }
 
+  // 打字机效果：目标文本（targetText）由 AI 流式返回随时更新，实际展示
+  // 的文本（revealedLength）通过独立的定时器逐步逼近目标，而不是每次
+  // 收到网络分片就立刻整段刷屏。这样即使上游一次性推来一大段文字，
+  // 用户看到的也是均匀、连续地往前吐字，而不是一顿一顿地跳动。
+  let targetText = '';
+  let revealedLength = 0;
+  let streamDone = false;
+  let revealTicking = false;
+
+  async function revealTick(force = false) {
+    if (revealTicking) return;
+    revealTicking = true;
+    try {
+      if (revealedLength < targetText.length) {
+        const remaining = targetText.length - revealedLength;
+        const step = Math.max(
+          REVEAL_MIN_CHARS,
+          Math.ceil(remaining * REVEAL_CATCHUP_RATIO)
+        );
+        revealedLength = Math.min(targetText.length, revealedLength + step);
+      }
+      const visible = targetText.slice(0, revealedLength);
+      const clean = sanitizeMarkdown(visible);
+      const display = clean.length > 3800 ? `${clean.slice(0, 3800)}…` : clean;
+      const isFinished = streamDone && revealedLength >= targetText.length;
+      await flushEdit(isFinished ? display : `${display}${TYPING_CURSOR}`, force || isFinished);
+    } finally {
+      revealTicking = false;
+    }
+  }
+
+  const revealInterval = setInterval(() => {
+    revealTick().catch(() => {});
+  }, REVEAL_TICK_MS);
+
   const { text: finalText, usage: chatUsage } = await generateReplyStream(ctx.env, history, text, prompt, {
     onChunk: async (fullTextSoFar) => {
       if (placeholderActive) {
         placeholderActive = false;
         clearInterval(placeholderInterval);
       }
-      const clean = sanitizeMarkdown(fullTextSoFar);
-      const display = clean.length > 3800
-        ? `${clean.slice(0, 3800)}…`
-        : clean;
-      await flushEdit(display + TYPING_CURSOR);
+      targetText = fullTextSoFar;
     },
     onDone: async (full) => {
       placeholderActive = false;
       clearInterval(placeholderInterval);
-      await flushEdit(sanitizeMarkdown(full), true);
+      targetText = full;
+      streamDone = true;
+      clearInterval(revealInterval);
+      revealedLength = targetText.length;
+      await flushEdit(sanitizeMarkdown(targetText), true);
     },
     onError: async () => {
       placeholderActive = false;
       clearInterval(placeholderInterval);
+      streamDone = true;
+      clearInterval(revealInterval);
       await flushEdit('抱歉，AI 服务暂时出了点问题，请稍后再试。', true);
     }
   }, modelId);
+
+  clearInterval(revealInterval);
 
   const cleanFinalText = sanitizeMarkdown(finalText);
 
