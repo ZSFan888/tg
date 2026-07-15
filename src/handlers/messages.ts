@@ -143,9 +143,10 @@ export async function runAiTurn(
     }
   }
 
-  // Telegram 单条消息最大约 4096 字符；完整回答超出时，先把开头编辑进占位消息，
-  // 剩余部分再作为新消息续发，避免因为一次性编辑超长文本失败而导致回答被截断。
-  const TELEGRAM_MAX_LEN = 4000;
+  // Telegram Bot API 对单条文本消息存在长度上限，sendMessage 的 text 最多 4096 字符，
+  // 不能真正改成“无限长度”；只能在应用层自动拆分成多条连续消息发送。
+  // 这里留一点余量，避免边界字符/换行导致偶发的 TEXT_TOO_LONG。
+  const TELEGRAM_MAX_LEN = 3900;
 
   async function sendFinalText(fullText: string) {
     if (fullText.length <= TELEGRAM_MAX_LEN) {
