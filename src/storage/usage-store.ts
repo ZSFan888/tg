@@ -1,4 +1,4 @@
-import type { Env, UsageState } from '../types/env';
+import type { Env, KnownUser, UsageState } from '../types/env';
 
 function key(userId: number | string) {
   return `usage:${userId}`;
@@ -40,12 +40,12 @@ const HISTORY_DAYS = 14;
 export async function incrementGlobalStats(env: Env) {
   const today = todayKey();
   const raw = await env.BOT_KV.get(GLOBAL_KEY, 'json');
-  const state = raw as { date: string; messageCount: number } | null;
+  const state = raw as { date: string; messageCount: number; activeUsers?: number } | null;
 
   const next =
     state && state.date === today
-      ? { date: today, messageCount: state.messageCount + 1 }
-      : { date: today, messageCount: 1 };
+      ? { date: today, messageCount: state.messageCount + 1, activeUsers: state.activeUsers ?? 0 }
+      : { date: today, messageCount: 1, activeUsers: 0 };
 
   await env.BOT_KV.put(GLOBAL_KEY, JSON.stringify(next), { expirationTtl: 60 * 60 * 24 * 2 });
   await bumpHistory(env, today);
@@ -55,10 +55,10 @@ export async function incrementGlobalStats(env: Env) {
 export async function getGlobalStats(env: Env) {
   const today = todayKey();
   const raw = await env.BOT_KV.get(GLOBAL_KEY, 'json');
-  const state = raw as { date: string; messageCount: number } | null;
+  const state = raw as { date: string; messageCount: number; activeUsers?: number } | null;
 
   if (!state || state.date !== today) {
-    return { date: today, messageCount: 0 };
+    return rebuildTodayGlobalStatsFromUsers(env);
   }
   return state;
 }
@@ -104,4 +104,31 @@ export async function incrementModelUsage(env: Env, modelId: string) {
 export async function getModelStats(env: Env): Promise<Record<string, number>> {
   const raw = await env.BOT_KV.get(MODEL_STATS_KEY, 'json');
   return (raw as Record<string, number> | null) ?? {};
+}
+
+
+export async function rebuildTodayGlobalStatsFromUsers(env: Env) {
+  const today = todayKey();
+  const indexRaw = await env.BOT_KV.get('users:index', 'json');
+  const userIds = (indexRaw as number[] | null) ?? [];
+  let total = 0;
+  let activeUsers = 0;
+
+  for (const userId of userIds) {
+    const userRaw = await env.BOT_KV.get(`user:${userId}`, 'json');
+    const usageRaw = await env.BOT_KV.get(`usage:${userId}`, 'json');
+    const user = userRaw as KnownUser | null;
+    const usage = usageRaw as UsageState | null;
+    if (usage && usage.date === today) {
+      total += usage.count;
+      if (usage.count > 0) activeUsers += 1;
+    } else if (user) {
+      const lastSeenDay = new Date(user.lastSeenAt).toISOString().slice(0, 10);
+      if (lastSeenDay == today) activeUsers += 1;
+    }
+  }
+
+  const next = { date: today, messageCount: total, activeUsers };
+  await env.BOT_KV.put(GLOBAL_KEY, JSON.stringify(next), { expirationTtl: 60 * 60 * 24 * 2 });
+  return next;
 }

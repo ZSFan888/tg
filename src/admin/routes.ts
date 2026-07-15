@@ -12,7 +12,7 @@ import {
   destroyAdminSession
 } from './auth-store';
 import { getAllKnownUsers } from '../storage/users-store';
-import { getGlobalStats, getStatsHistory, getModelStats, getUsage } from '../storage/usage-store';
+import { getGlobalStats, getStatsHistory, getModelStats, getUsage, rebuildTodayGlobalStatsFromUsers } from '../storage/usage-store';
 import { clearChatHistory } from '../storage/chat-store';
 import { getBanRecord, banUser, unbanUser } from '../storage/ban-store';
 import { MODELS } from '../config/models';
@@ -153,10 +153,8 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
 
   app.get('/api/admin/status', async (c) => {
     const env = await resolveEnv(c.env);
-    const [globalStats, users] = await Promise.all([
-      getGlobalStats(env),
-      getAllKnownUsers(env)
-    ]);
+    const [users] = await Promise.all([getAllKnownUsers(env)]);
+    const globalStats = await rebuildTodayGlobalStatsFromUsers(env);
 
     let webhookInfo: { ok: boolean; url?: string; pending_update_count?: number } = { ok: false };
     try {
@@ -218,6 +216,7 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
   app.get('/api/admin/users', async (c) => {
     const env = await resolveEnv(c.env);
     const users = await getAllKnownUsers(env);
+    await rebuildTodayGlobalStatsFromUsers(env);
     const enriched = await Promise.all(
       users.map(async (u) => {
         const [usage, ban] = await Promise.all([
