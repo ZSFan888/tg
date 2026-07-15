@@ -180,7 +180,7 @@ export async function generateReply(
     const text = output || '我现在有点忙，请你换个问法再试一次。';
     const usage = readUsage(result) ?? {
       promptTokens: estimateTokensFromText(messages.map((m) => m.content).join('')),
-      completionTokens: estimateTokensFromText(text)
+      completionTokens: Math.max(64, estimateTokensFromText(text))
     };
     return { text, usage };
   } catch (err) {
@@ -250,7 +250,10 @@ export async function generateReplyStream(
       await callbacks.onDone(fallback);
       const usage = readUsage(result) ?? {
         promptTokens: estimateTokensFromText(messages.map((m) => m.content).join('')),
-        completionTokens: estimateTokensFromText(fallback)
+        completionTokens: Math.max(
+          64,
+          estimateTokensFromText(fallback)
+        )
       };
       return { text: fallback, usage };
     }

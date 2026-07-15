@@ -176,6 +176,8 @@ export async function runAiTurn(
   let revealedLength = 0;
   let streamDone = false;
   let revealTicking = false;
+  let lastStreamLength = 0;
+  let stallTimer: ReturnType<typeof setInterval> | null = null;
 
   async function revealTick(force = false) {
     if (revealTicking) return;
@@ -206,6 +208,14 @@ export async function runAiTurn(
     revealTick().catch(() => {});
   }, REVEAL_TICK_MS);
 
+  stallTimer = setInterval(() => {
+    if (streamDone) return;
+    if (targetText.length > lastStreamLength && revealedLength < targetText.length) {
+      lastStreamLength = targetText.length;
+      revealTick(true).catch(() => {});
+    }
+  }, 1000);
+
   const { text: finalText, usage: chatUsage } = await generateReplyStream(ctx.env, history, text, prompt, {
     onChunk: async (fullTextSoFar) => {
       if (placeholderActive) {
@@ -213,6 +223,7 @@ export async function runAiTurn(
         clearInterval(placeholderInterval);
       }
       targetText = fullTextSoFar;
+      lastStreamLength = targetText.length;
     },
     onDone: async (full) => {
       placeholderActive = false;
@@ -220,6 +231,9 @@ export async function runAiTurn(
       targetText = full;
       streamDone = true;
       clearInterval(revealInterval);
+      if (stallTimer) clearInterval(stallTimer);
+      if (stallTimer) clearInterval(stallTimer);
+      if (stallTimer) clearInterval(stallTimer);
       revealedLength = targetText.length;
       await sendFinalText(sanitizeMarkdown(targetText));
     },
@@ -228,6 +242,7 @@ export async function runAiTurn(
       clearInterval(placeholderInterval);
       streamDone = true;
       clearInterval(revealInterval);
+      if (stallTimer) clearInterval(stallTimer);
       await flushEdit('抱歉，AI 服务暂时出了点问题，请稍后再试。', true);
     }
   }, modelId);
