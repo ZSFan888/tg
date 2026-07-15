@@ -40,6 +40,7 @@ export interface UserPreferences {
   modelId?: string;
   webSearchEnabled?: boolean;
   voiceReplyEnabled?: boolean;
+  voiceModeEnabled?: boolean;
   updatedAt: number;
 }
 

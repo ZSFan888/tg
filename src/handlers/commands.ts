@@ -2,7 +2,7 @@ import { InlineKeyboard, InputFile } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences, setVoiceReplyEnabled } from '../storage/preferences-store';
+import { getUserPreferences, setVoiceReplyEnabled, setVoiceModeEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
@@ -42,6 +42,8 @@ export function registerCommands(bot: Bot<BotContext>) {
       .row()
       .text('AI 生图', 'menu:image')
       .text('语音回复', 'menu:voice')
+      .row()
+      .text('语音模式', 'menu:voicemode')
       .row()
       .text('清空上下文', 'menu:clear')
       .text('使用统计', 'menu:usage')
@@ -132,6 +134,14 @@ export function registerCommands(bot: Bot<BotContext>) {
     const next = !prefs.voiceReplyEnabled;
     await setVoiceReplyEnabled(ctx.env, ctx.from.id, next);
     await ctx.reply(next ? '语音回复：已开启\n之后我会在文字回答后额外发一条语音。' : '语音回复：已关闭\n恢复为只输出文字回答。');
+  });
+
+  bot.command('voicemode', async (ctx) => {
+    if (!ctx.from) return;
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const next = !prefs.voiceModeEnabled;
+    await setVoiceModeEnabled(ctx.env, ctx.from.id, next);
+    await ctx.reply(next ? '语音模式：已开启\n你发语音给我时，我会优先直接回语音。' : '语音模式：已关闭\n恢复为常规聊天模式。');
   });
 
   bot.command('usage', async (ctx) => {

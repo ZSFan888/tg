@@ -60,3 +60,12 @@ export async function setVoiceReplyEnabled(env: Env, userId: number | string, en
   });
   return prefs;
 }
+
+export async function setVoiceModeEnabled(env: Env, userId: number | string, enabled: boolean) {
+  const existing = await getUserPreferences(env, userId);
+  const prefs: UserPreferences = { ...existing, voiceModeEnabled: enabled, updatedAt: Date.now() };
+  await env.BOT_KV.put(key(userId), JSON.stringify(prefs), {
+    expirationTtl: 60 * 60 * 24 * 90
+  });
+  return prefs;
+}

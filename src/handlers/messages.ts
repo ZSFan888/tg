@@ -43,6 +43,9 @@ interface RunAiTurnOptions {
   historyOverride?: ChatMessage[];
   isRegenerate?: boolean;
   editedNotice?: boolean;
+  suppressVoiceReply?: boolean;
+  voiceFirstReply?: boolean;
+  noFollowUps?: boolean;
 }
 
 export async function runAiTurn(
@@ -85,7 +88,10 @@ export async function runAiTurn(
     getUserPreferences(ctx.env, userId),
     options.historyOverride ? Promise.resolve(options.historyOverride) : getChatHistory(ctx.env, chatId)
   ]);
-  const { prompt: basePrompt } = resolveSystemPrompt(prefs);
+  const { prompt: resolvedBasePrompt } = resolveSystemPrompt(prefs);
+  const basePrompt = options.voiceFirstReply
+    ? `${resolvedBasePrompt}\n\n当前是语音模式。请使用简短、自然、口语化、适合直接朗读的中文回答。优先 2 到 5 句，不要使用复杂列表，不要写长段落。`
+    : resolvedBasePrompt;
   const history = historyFromStore;
   const modelId = prefs.modelId ?? ctx.env.AI_MODEL;
 
@@ -237,9 +243,11 @@ export async function runAiTurn(
     recordNeuronUsage(ctx.env, estimateChatNeurons(modelId, chatUsage.promptTokens, chatUsage.completionTokens), 'chat')
   ]);
 
-  ctx.waitUntil(maybeSendVoiceReply(ctx, chatId, userId, placeholder.message_id, cleanFinalText));
+  if (!options.suppressVoiceReply) {
+    ctx.waitUntil(maybeSendVoiceReply(ctx, chatId, userId, placeholder.message_id, cleanFinalText));
+  }
 
-  ctx.waitUntil(
+  if (!options.noFollowUps) ctx.waitUntil(
     generateFollowUps(ctx.env, text, cleanFinalText, modelId)
     .then(async (questions) => {
       const followKeyboard = new InlineKeyboard().text('› 重新生成', 'regen:last');
@@ -278,6 +286,74 @@ async function maybeSendVoiceReply(ctx: BotContext, chatId: number, userId: numb
   if (!speech.ok || !speech.audioBytes) return;
 
   await ctx.api.sendVoice(chatId, new InputFile(speech.audioBytes, 'reply.mp3'), replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(() => {});
+}
+
+async function runVoiceModeTurn(
+  ctx: BotContext,
+  chatId: number,
+  userId: number,
+  text: string,
+  replyToMessageId: number | undefined
+) {
+  const summaryPlaceholder = await ctx.reply('· 正在组织语音回复…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+
+  const originalSendMessage = ctx.api.sendMessage.bind(ctx.api);
+  const originalEditText = ctx.api.editMessageText.bind(ctx.api);
+  const originalEditMarkup = ctx.api.editMessageReplyMarkup.bind(ctx.api);
+
+  let finalText = '';
+
+  ctx.api.sendMessage = (async (chat_id: number | string, text: string, other?: unknown) => {
+    if (Number(chat_id) === chatId && typeof text === 'string') {
+      finalText = text;
+      return summaryPlaceholder as never;
+    }
+    return originalSendMessage(chat_id as never, text as never, other as never);
+  }) as typeof ctx.api.sendMessage;
+
+  ctx.api.editMessageText = (async (chat_id: number | string, message_id: number, text: string, other?: unknown) => {
+    if (Number(chat_id) === chatId && message_id === summaryPlaceholder.message_id && typeof text === 'string') {
+      finalText = text.replace(/ ▌$/, '');
+      return summaryPlaceholder as never;
+    }
+    return originalEditText(chat_id as never, message_id as never, text as never, other as never);
+  }) as typeof ctx.api.editMessageText;
+
+  ctx.api.editMessageReplyMarkup = (async (chat_id: number | string, message_id: number, other?: unknown) => {
+    if (Number(chat_id) === chatId && message_id === summaryPlaceholder.message_id) {
+      return true as never;
+    }
+    return originalEditMarkup(chat_id as never, message_id as never, other as never);
+  }) as typeof ctx.api.editMessageReplyMarkup;
+
+  try {
+    await runAiTurn(ctx, chatId, userId, text, replyToMessageId, {
+      voiceFirstReply: true,
+      suppressVoiceReply: true,
+      noFollowUps: true
+    });
+  } finally {
+    ctx.api.sendMessage = originalSendMessage;
+    ctx.api.editMessageText = originalEditText;
+    ctx.api.editMessageReplyMarkup = originalEditMarkup;
+  }
+
+  finalText = sanitizeMarkdown(finalText).trim();
+  if (!finalText) {
+    await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, '抱歉，这次没有成功生成语音回复，请再试一次。').catch(() => {});
+    return;
+  }
+
+  const speech = await synthesizeSpeech(ctx.env, finalText);
+  if (!speech.ok || !speech.audioBytes) {
+    await ctx.api.editMessageText(chatId, summaryPlaceholder.message_id, finalText).catch(() => {});
+    return;
+  }
+
+  await ctx.api.deleteMessage(chatId, summaryPlaceholder.message_id).catch(() => {});
+  await ctx.api.sendVoice(chatId, new InputFile(speech.audioBytes, 'voice-mode.mp3'), replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(async () => {
+    await ctx.reply(finalText, replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  });
 }
 
 export async function runImageTurn(
@@ -429,7 +505,12 @@ export function registerMessages(bot: Bot<BotContext>) {
         await recordNeuronUsage(ctx.env, (durationSeconds / 60) * WHISPER_NEURONS_PER_MINUTE, 'audio');
       }
 
-      await runAiTurn(ctx, ctx.chat.id, ctx.from.id, transcription.text, ctx.message!.message_id);
+      const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+      if (prefs.voiceModeEnabled) {
+        await runVoiceModeTurn(ctx, ctx.chat.id, ctx.from.id, transcription.text, ctx.message!.message_id);
+      } else {
+        await runAiTurn(ctx, ctx.chat.id, ctx.from.id, transcription.text, ctx.message!.message_id);
+      }
     } catch (err) {
       console.error('Voice handling failed:', err);
       statusActive = false;

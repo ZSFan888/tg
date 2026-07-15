@@ -3,7 +3,7 @@ import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import type { PersonaKey } from '../types/env';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences, setUserPersona, setUserModel, setWebSearchEnabled, setVoiceReplyEnabled } from '../storage/preferences-store';
+import { getUserPreferences, setUserPersona, setUserModel, setWebSearchEnabled, setVoiceReplyEnabled, setVoiceModeEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
@@ -92,6 +92,23 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       enabled
         ? '语音回复：已开启\n之后我在文字回答后，会额外发一条语音。'
         : '语音回复：已关闭\n开启后，我会在文字回答后额外发一条语音。',
+      { reply_markup: keyboard }
+    );
+  });
+
+  bot.callbackQuery('menu:voicemode', async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
+
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const enabled = Boolean(prefs.voiceModeEnabled);
+    const keyboard = new InlineKeyboard()
+      .text(enabled ? '关闭语音模式' : '开启语音模式', `voicemode:${enabled ? 'off' : 'on'}`);
+
+    await ctx.reply(
+      enabled
+        ? '语音模式：已开启\n你发语音时，我会优先直接回语音，更像语音助手。'
+        : '语音模式：已关闭\n开启后，你发语音给我时，我会优先回语音。',
       { reply_markup: keyboard }
     );
   });
@@ -389,6 +406,20 @@ export function registerCallbacks(bot: Bot<BotContext>) {
 
     await ctx.answerCallbackQuery({ text: `已切换到${model.label}` });
     await ctx.editMessageText(`模型已切换为：${model.label}\n${model.note}`);
+  });
+
+  bot.callbackQuery(/^voicemode:(on|off)$/, async (ctx) => {
+    if (!ctx.from) return;
+    const nextState = ctx.match?.[1] === 'on';
+
+    await setVoiceModeEnabled(ctx.env, ctx.from.id, nextState);
+
+    await ctx.answerCallbackQuery({ text: nextState ? '语音模式已开启' : '语音模式已关闭' });
+    await ctx.editMessageText(
+      nextState
+        ? '语音模式：已开启\n你发语音给我时，我会优先直接回语音。'
+        : '语音模式：已关闭\n恢复为常规文字聊天逻辑。'
+    );
   });
 
   bot.callbackQuery(/^voice:(on|off)$/, async (ctx) => {
