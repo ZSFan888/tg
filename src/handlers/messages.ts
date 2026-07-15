@@ -17,6 +17,7 @@ import { transcribeAudio } from '../services/transcribe';
 import { getModelById } from '../config/models';
 import { synthesizeSpeech } from '../services/tts';
 import { generateImage, editImage } from '../services/image';
+import { analyzeImage } from '../services/vision';
 import { resolveSystemPrompt } from '../config/personas';
 import { recordNeuronUsage, estimateChatNeurons, WHISPER_NEURONS_PER_MINUTE } from '../storage/neurons-store';
 import { recordActivityAndCount, shouldAlertAndMark } from '../storage/anomaly-store';
@@ -539,6 +540,37 @@ export async function runImageEditTurn(
   });
 }
 
+
+async function runVisionTurn(
+  ctx: BotContext,
+  chatId: number,
+  userId: number,
+  prompt: string,
+  sourceFileId: string,
+  replyToMessageId: number | undefined
+) {
+  const file = await ctx.api.getFile(sourceFileId);
+  if (!file.file_path) {
+    await ctx.reply('抱歉，无法读取这张图片，请重新发送。', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+    return;
+  }
+
+  const fileUrl = `https://api.telegram.org/file/bot${ctx.env.BOT_TOKEN}/${file.file_path}`;
+  const prefs = await getUserPreferences(ctx.env, userId);
+  const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
+  const visionModelId = selectedModel?.task === 'vision' ? selectedModel.id : '@cf/llava-hf/llava-1.5-7b-hf';
+
+  const placeholder = await ctx.api.sendMessage(chatId, '· 正在分析图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const result = await analyzeImage(ctx.env, fileUrl, prompt, visionModelId);
+  if (!result.ok || !result.text) {
+    await ctx.api.editMessageText(chatId, placeholder.message_id, '抱歉，看图失败了，请换一张图片或换个问题再试。').catch(() => {});
+    return;
+  }
+
+  await ctx.api.editMessageText(chatId, placeholder.message_id, `看图结果：
+${result.text}`).catch(() => {});
+}
+
 export function registerMessages(bot: Bot<BotContext>) {
   bot.on(['message:text', 'edited_message:text'], async (ctx) => {
     const rawText = ctx.message?.text ?? ctx.editedMessage?.text ?? '';
@@ -585,6 +617,12 @@ export function registerMessages(bot: Bot<BotContext>) {
 
       if (pending?.action === 'awaiting_image_edit_prompt' && pending.fileId) {
         await clearPendingAction(ctx.env, ctx.from.id);
+        const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
+        if (selectedModel?.task === 'vision' || detectPhotoIntent(text) === 'vision') {
+          const questionMsg = await ctx.reply(`已收到你的看图问题：${text}`);
+          await runVisionTurn(ctx, ctx.chat.id, ctx.from.id, text, pending.fileId, questionMsg.message_id);
+          return;
+        }
         const questionMsg = await ctx.reply(`已收到你的重绘需求：${text}`);
         await runImageEditTurn(ctx, ctx.chat.id, ctx.from.id, text, pending.fileId, questionMsg.message_id);
         return;
