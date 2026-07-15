@@ -2,7 +2,7 @@ import { InlineKeyboard, InputFile } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences } from '../storage/preferences-store';
+import { getUserPreferences, setVoiceReplyEnabled, setVoiceModeEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
@@ -12,6 +12,7 @@ import { isAdmin } from '../utils/access';
 import { getAllKnownUsers } from '../storage/users-store';
 import { getGlobalStats, getStatsHistory, getModelStats } from '../storage/usage-store';
 import { banUser, unbanUser } from '../storage/ban-store';
+import { runImageTurn } from './messages';
 import { buildUsageChartUrl } from '../services/chart';
 import {
   getTodayNeuronUsage,
@@ -37,7 +38,10 @@ export function registerCommands(bot: Bot<BotContext>) {
       .text('偏好设置', 'menu:settings')
       .row()
       .text('切换模型', 'menu:model')
+      .text('AI 生图', 'menu:image')
       .row()
+      .text('语音回复', 'menu:voice')
+      .text('语音模式', 'menu:voicemode')
 
       .row()
       .text('清空上下文', 'menu:clear')
@@ -62,9 +66,10 @@ export function registerCommands(bot: Bot<BotContext>) {
   bot.command('help', async (ctx) => {
     const lines = [
       '发送 /start 可以打开功能菜单，里面的按钮包含了绝大部分功能：',
-      '· 开始聊天 / 偏好设置 / 切换模型 / 清空上下文 / 使用统计 / 导出记录 / 我的 ID',
+      '· 开始聊天 / 偏好设置 / 切换模型 / AI 生图',
+      '· 语音回复 / 语音模式 / 清空上下文 / 使用统计 / 导出记录 / 我的 ID',
       '',
-      '也可以直接发送文字或语音；语音消息会先转成文字，再按普通对话方式回复。'
+      '也可以直接发送文字、语音，或先发图片再描述修改需求；我会自动识别并回复。'
     ];
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
@@ -112,8 +117,31 @@ export function registerCommands(bot: Bot<BotContext>) {
     await ctx.reply('请发送你想要的系统提示词（描述这个 AI 应该扮演什么角色、用什么语气回答）。5 分钟内有效。');
   });
 
+  bot.command('image', async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
+    const raw = ctx.match?.trim() ?? '';
+    if (!raw) {
+      await ctx.reply('用法：/image 一只戴墨镜的橘猫坐在咖啡馆窗边');
+      return;
+    }
+    await runImageTurn(ctx, ctx.chat.id, ctx.from.id, raw, ctx.message?.message_id);
+  });
 
+  bot.command('voice', async (ctx) => {
+    if (!ctx.from) return;
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const next = !prefs.voiceReplyEnabled;
+    await setVoiceReplyEnabled(ctx.env, ctx.from.id, next);
+    await ctx.reply(next ? '语音回复：已开启\n之后我会在文字回答后额外发一条语音。' : '语音回复：已关闭\n恢复为只输出文字回答。');
+  });
 
+  bot.command('voicemode', async (ctx) => {
+    if (!ctx.from) return;
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const next = !prefs.voiceModeEnabled;
+    await setVoiceModeEnabled(ctx.env, ctx.from.id, next);
+    await ctx.reply(next ? '语音模式：已开启\n你发语音给我时，我会优先直接回语音。' : '语音模式：已关闭\n恢复为常规聊天模式。');
+  });
 
   bot.command('usage', async (ctx) => {
     if (!ctx.from) return;

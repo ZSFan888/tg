@@ -3,13 +3,13 @@ import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
 import type { PersonaKey } from '../types/env';
 import { clearChatHistory, getChatHistory } from '../storage/chat-store';
-import { getUserPreferences, setUserPersona, setUserModel } from '../storage/preferences-store';
+import { getUserPreferences, setUserPersona, setUserModel, setVoiceReplyEnabled, setVoiceModeEnabled } from '../storage/preferences-store';
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
 import { MODELS, PROVIDERS, getModelById, getModelByKey, getModelsByProvider, getProviderByKey } from '../config/models';
 import { getFollowUps } from '../storage/followup-store';
-import { runAiTurn } from './messages';
+import { runAiTurn, runImageTurn } from './messages';
 import { isAdmin } from '../utils/access';
 import { getAllKnownUsers } from '../storage/users-store';
 import { getGlobalStats, getStatsHistory, getModelStats } from '../storage/usage-store';
@@ -73,8 +73,46 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     );
   });
 
+  bot.callbackQuery('menu:image', async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
+    await setPendingAction(ctx.env, ctx.from.id, 'awaiting_image_prompt');
+    await ctx.reply('请告诉我你想生成什么图。\n如果你是想重绘现有图片，也可以直接先发一张图给我，然后再描述你想怎么改。');
+  });
 
+  bot.callbackQuery('menu:voice', async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
 
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const enabled = Boolean(prefs.voiceReplyEnabled);
+    const keyboard = new InlineKeyboard()
+      .text(enabled ? '关闭语音回复' : '开启语音回复', `voice:${enabled ? 'off' : 'on'}`);
+
+    await ctx.reply(
+      enabled
+        ? '语音回复：已开启\n之后我在文字回答后，会额外发一条语音。'
+        : '语音回复：已关闭\n开启后，我会在文字回答后额外发一条语音。',
+      { reply_markup: keyboard }
+    );
+  });
+
+  bot.callbackQuery('menu:voicemode', async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
+
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+    const enabled = Boolean(prefs.voiceModeEnabled);
+    const keyboard = new InlineKeyboard()
+      .text(enabled ? '关闭语音模式' : '开启语音模式', `voicemode:${enabled ? 'off' : 'on'}`);
+
+    await ctx.reply(
+      enabled
+        ? '语音模式：已开启\n你发语音时，我会优先直接回语音，更像语音助手。'
+        : '语音模式：已关闭\n开启后，你发语音给我时，我会优先回语音。',
+      { reply_markup: keyboard }
+    );
+  });
 
   bot.callbackQuery('menu:export', async (ctx) => {
     if (!ctx.chat) return;
@@ -136,13 +174,14 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       '· 直接发消息即可聊天',
       '· 偏好设置 - 切换回复风格/自定义提示词',
       '· 切换模型 - 选择不同能力/速度的 AI 模型',
+      '· AI 生图 - 支持直接文生图，也支持先发图再描述修改需求',
       '· 清空上下文 - 重置当前会话记忆',
       '· 使用统计 - 查看今日使用次数和限流',
       '· 导出记录 - 把当前对话保存为文本文件',
       '· 我的 ID - 查看你的 Telegram 用户 ID / 会话 ID',
       '· 系统状态 - 检测机器人是否在线及响应延迟',
       '',
-      '也可以直接发送语音消息；我会先识别成文字，再按普通聊天逻辑回复。'
+      '也可以直接发送语音消息；开启语音模式后，我会优先回语音。'
     ];
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
@@ -353,7 +392,33 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     await ctx.editMessageText(`模型已切换为：${model.label}\n${model.note}`);
   });
 
+  bot.callbackQuery(/^voicemode:(on|off)$/, async (ctx) => {
+    if (!ctx.from) return;
+    const nextState = ctx.match?.[1] === 'on';
 
+    await setVoiceModeEnabled(ctx.env, ctx.from.id, nextState);
+
+    await ctx.answerCallbackQuery({ text: nextState ? '语音模式已开启' : '语音模式已关闭' });
+    await ctx.editMessageText(
+      nextState
+        ? '语音模式：已开启\n你发语音给我时，我会优先直接回语音。'
+        : '语音模式：已关闭\n恢复为常规文字聊天逻辑。'
+    );
+  });
+
+  bot.callbackQuery(/^voice:(on|off)$/, async (ctx) => {
+    if (!ctx.from) return;
+    const nextState = ctx.match?.[1] === 'on';
+
+    await setVoiceReplyEnabled(ctx.env, ctx.from.id, nextState);
+
+    await ctx.answerCallbackQuery({ text: nextState ? '语音回复已开启' : '语音回复已关闭' });
+    await ctx.editMessageText(
+      nextState
+        ? '语音回复：已开启\n之后我会在文字回答后额外发一条语音。'
+        : '语音回复：已关闭\n恢复为只输出文字回答。'
+    );
+  });
 
   bot.callbackQuery('regen:last', async (ctx) => {
     if (!ctx.from || !ctx.chat) return;
