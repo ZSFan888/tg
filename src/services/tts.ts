@@ -14,7 +14,7 @@ function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-export async function synthesizeSpeech(env: Env, text: string, lang = 'zh'): Promise<SpeechResult> {
+export async function synthesizeSpeech(env: Env, text: string, lang = 'ZH'): Promise<SpeechResult> {
   try {
     const result = await env.AI.run('@cf/myshell-ai/melotts', {
       prompt: text.slice(0, 1200),
