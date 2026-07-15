@@ -18,6 +18,7 @@ import { getModelById } from '../config/models';
 import { synthesizeSpeech } from '../services/tts';
 import { generateImage, editImage } from '../services/image';
 import { analyzeImage } from '../services/vision';
+import { translateText } from '../services/translation';
 import { resolveSystemPrompt } from '../config/personas';
 import { recordNeuronUsage, estimateChatNeurons, WHISPER_NEURONS_PER_MINUTE } from '../storage/neurons-store';
 import { recordActivityAndCount, shouldAlertAndMark } from '../storage/anomaly-store';
@@ -48,12 +49,23 @@ function detectPhotoIntent(text: string): 'vision' | 'image_edit' {
   return visionKeywords.some((kw) => normalized.includes(kw)) ? 'vision' : 'image_edit';
 }
 
-function detectAutoTask(text: string): 'image' | 'chat' {
+function parseTranslationTarget(text: string): string | null {
+  const normalized = text.trim().toLowerCase();
+  if (normalized.includes('翻译成英文') || normalized.includes('译成英文') || normalized.includes('translate to english')) return 'en';
+  if (normalized.includes('翻译成中文') || normalized.includes('译成中文') || normalized.includes('translate to chinese')) return 'zh';
+  if (normalized.includes('翻译成日文') || normalized.includes('译成日文') || normalized.includes('translate to japanese')) return 'ja';
+  if (normalized.includes('翻译成韩文') || normalized.includes('译成韩文') || normalized.includes('translate to korean')) return 'ko';
+  if (normalized.includes('翻译成法文') || normalized.includes('译成法文') || normalized.includes('translate to french')) return 'fr';
+  return null;
+}
+
+function detectAutoTask(text: string): 'image' | 'translation' | 'chat' {
   const normalized = text.trim().toLowerCase();
   const imageKeywords = [
     '画', '画一张', '生成图片', '生成一张图', '生图', '做一张图', '帮我画', '出图', '海报', '封面图', 'logo', '插画',
     'draw', 'generate image', 'create image', 'make an image', 'illustration', 'poster', 'logo', 'thumbnail'
   ];
+  if (parseTranslationTarget(text)) return 'translation';
   return imageKeywords.some((kw) => normalized.includes(kw)) ? 'image' : 'chat';
 }
 
@@ -541,6 +553,28 @@ export async function runImageEditTurn(
 }
 
 
+
+async function runTranslationTurn(
+  ctx: BotContext,
+  chatId: number,
+  userId: number,
+  text: string,
+  targetLang: string,
+  replyToMessageId: number | undefined
+) {
+  const prefs = await getUserPreferences(ctx.env, userId);
+  const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
+  const translationModelId = selectedModel?.task === 'translation' ? selectedModel.id : '@cf/facebook/m2m100-1.2b';
+  const placeholder = await ctx.api.sendMessage(chatId, '· 正在翻译…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const result = await translateText(ctx.env, text, targetLang, 'auto', translationModelId);
+  if (!result.ok || !result.text) {
+    await ctx.api.editMessageText(chatId, placeholder.message_id, '抱歉，翻译失败了，请换个说法再试。').catch(() => {});
+    return;
+  }
+  await ctx.api.editMessageText(chatId, placeholder.message_id, `翻译结果：
+${result.text}`).catch(() => {});
+}
+
 async function runVisionTurn(
   ctx: BotContext,
   chatId: number,
@@ -637,6 +671,12 @@ export function registerMessages(bot: Bot<BotContext>) {
       if (detectedTask === 'image') {
         const questionMsg = await ctx.reply(`已自动识别为生图需求：${text}`);
         await runImageTurn(ctx, ctx.chat.id, ctx.from.id, text, questionMsg.message_id);
+        return;
+      }
+      if (detectedTask === 'translation') {
+        const targetLang = parseTranslationTarget(text) ?? 'en';
+        const questionMsg = await ctx.reply(`已自动识别为翻译需求：${text}`);
+        await runTranslationTurn(ctx, ctx.chat.id, ctx.from.id, text, targetLang, questionMsg.message_id);
         return;
       }
     }
