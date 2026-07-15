@@ -99,6 +99,52 @@ function estimateTokensFromText(text: string): number {
   return Math.ceil(text.length / 2.5);
 }
 
+
+export async function optimizeImagePrompt(
+  env: Env,
+  userPrompt: string
+): Promise<{ optimizedPrompt: string; briefTip?: string }> {
+  const systemPrompt = [
+    '你是一个专业的中文 AI 生图提示词优化器。',
+    '你的任务是把用户随口说的中文需求，改写成更适合 FLUX 文生图模型的高质量提示词。',
+    '必须保留用户原意，不要擅自改题，不要凭空加入不相关主体。',
+    '优先补全这些要素：主体、场景、构图、镜头远近、光线、时间、材质、色调、风格、用途。',
+    '如果用户需求过短或过模糊，也不要反问；直接做最稳妥的合理补全。',
+    '输出 JSON，格式固定为 {"optimizedPrompt":"...","briefTip":"..."}。',
+    'briefTip 用一句简短中文概括你补强了哪些信息，20 字以内。',
+    'optimizedPrompt 必须是适合直接送去生图的中文长提示词，不要带解释，不要带 markdown。'
+  ].join('\n');
+
+  try {
+    const modelId = env.AI_MODEL;
+    const result = await env.AI.run(modelId, {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: 600
+    });
+    const raw = readResponse(result).trim();
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]) as { optimizedPrompt?: string; briefTip?: string };
+      if (parsed.optimizedPrompt?.trim()) {
+        return {
+          optimizedPrompt: parsed.optimizedPrompt.trim(),
+          briefTip: parsed.briefTip?.trim() || undefined
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Image prompt optimization failed:', err instanceof Error ? err.message : String(err));
+  }
+
+  return {
+    optimizedPrompt: userPrompt,
+    briefTip: '已按原描述直接生成'
+  };
+}
+
 export async function generateReply(
   env: Env,
   history: ChatMessage[],

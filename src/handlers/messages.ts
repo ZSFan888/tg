@@ -1,7 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotContext } from '../bot/context';
-import { generateReplyStream } from '../services/ai';
+import { generateReplyStream, optimizeImagePrompt } from '../services/ai';
 import { generateFollowUps } from '../services/followups';
 import { getChatHistory, saveChatHistory } from '../storage/chat-store';
 import { checkRateLimit } from '../storage/rate-limit';
@@ -370,8 +370,9 @@ export async function runImageTurn(
     return;
   }
 
-  const placeholder = await ctx.api.sendMessage(chatId, '· 正在生成图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
-  const image = await generateImage(ctx.env, prompt);
+  const placeholder = await ctx.api.sendMessage(chatId, '· 正在优化提示词并生成图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const optimized = await optimizeImagePrompt(ctx.env, prompt);
+  const image = await generateImage(ctx.env, optimized.optimizedPrompt);
 
   if (!image.ok || !image.imageBytes) {
     const reason = image.errorMessage ? `\n原因：${image.errorMessage}` : '';
@@ -381,7 +382,7 @@ export async function runImageTurn(
 
   await ctx.api.deleteMessage(chatId, placeholder.message_id).catch(() => {});
   await ctx.api.sendPhoto(chatId, new InputFile(image.imageBytes, 'ai-image.jpg'), {
-    caption: `AI 生图提示词：${prompt.slice(0, 900)}`,
+    caption: `AI 生图提示词：${optimized.optimizedPrompt.slice(0, 900)}${optimized.briefTip ? `\n提示词优化：${optimized.briefTip}` : ''}`,
     ...(replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : {})
   }).catch(async () => {
     await ctx.reply('图片已经生成，但发送失败了，请稍后再试。');
@@ -402,14 +403,15 @@ export async function runImageEditTurn(
     return;
   }
 
-  const placeholder = await ctx.api.sendMessage(chatId, '· 正在重绘图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const placeholder = await ctx.api.sendMessage(chatId, '· 正在优化重绘需求并生成图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const optimized = await optimizeImagePrompt(ctx.env, prompt);
   const source = await downloadTelegramFile(ctx, sourceFileId);
   if (!source) {
     await ctx.api.editMessageText(chatId, placeholder.message_id, '抱歉，无法读取原图，请重新发送图片再试。').catch(() => {});
     return;
   }
 
-  const image = await editImage(ctx.env, prompt, source);
+  const image = await editImage(ctx.env, optimized.optimizedPrompt, source);
   if (!image.ok || !image.imageBytes) {
     const reason = image.errorMessage ? `\n原因：${image.errorMessage}` : '';
     await ctx.api.editMessageText(chatId, placeholder.message_id, `抱歉，图片重绘失败了，请换个修改要求再试。${reason}`).catch(() => {});
@@ -418,7 +420,7 @@ export async function runImageEditTurn(
 
   await ctx.api.deleteMessage(chatId, placeholder.message_id).catch(() => {});
   await ctx.api.sendPhoto(chatId, new InputFile(image.imageBytes, 'ai-redraw.jpg'), {
-    caption: `图片重绘需求：${prompt.slice(0, 900)}`,
+    caption: `图片重绘需求：${optimized.optimizedPrompt.slice(0, 900)}${optimized.briefTip ? `\n提示词优化：${optimized.briefTip}` : ''}`,
     ...(replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : {})
   }).catch(async () => {
     await ctx.reply('图片已经重绘完成，但发送失败了，请稍后再试。');
