@@ -90,7 +90,7 @@ export async function runAiTurn(
   ]);
   const { prompt: resolvedBasePrompt } = resolveSystemPrompt(prefs);
   const basePrompt = options.voiceFirstReply
-    ? `${resolvedBasePrompt}\n\n当前是语音模式。请使用简短、自然、口语化、适合直接朗读的中文回答。优先 2 到 5 句，不要使用复杂列表，不要写长段落。`
+    ? `${resolvedBasePrompt}\n\n当前是语音模式。请使用简短、自然、口语化、适合直接朗读的中文回答。优先 1 到 3 句，总长度尽量控制在 80 个中文字符以内，不要使用复杂列表，不要写长段落，不要加标题。`
     : resolvedBasePrompt;
   const history = historyFromStore;
   const modelId = prefs.modelId ?? ctx.env.AI_MODEL;
@@ -354,6 +354,9 @@ async function runVoiceModeTurn(
   await ctx.api.sendVoice(chatId, new InputFile(speech.audioBytes, 'voice-mode.mp3'), replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(async () => {
     await ctx.reply(finalText, replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
   });
+
+  const summary = finalText.length > 36 ? `${finalText.slice(0, 36)}…` : finalText;
+  await ctx.reply(`语音摘要：${summary}`, replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(() => {});
 }
 
 export async function runImageTurn(
