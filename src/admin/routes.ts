@@ -80,7 +80,7 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
         key: 'group_mention',
         label: '群聊@限制（可选）',
         ok: true,
-        detail: env.GROUP_MENTION_REQUIRED === 'true' ? '已开启，群聊需要@才回复' : '未开启，群聊全部消息都会回复',
+        detail: env.GROUP_MENTION_REQUIRED === 'true' ? '已开启，群聊中只有被@或回复机器人时才会响应' : '未开启，群聊中会按现有消息处理规则正常响应',
         optional: true
       }
     ];

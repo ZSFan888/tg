@@ -59,7 +59,7 @@ export const SETTINGS_META: SettingMeta[] = [
   {
     key: 'BOT_USERNAME',
     label: '机器人用户名',
-    description: '不带@符号，例如 my_ai_bot，用于识别群聊里的@提及',
+    description: '不带@符号，例如 my_ai_bot，用于识别群聊里的@提及与回复规则',
     type: 'text',
     placeholder: 'my_ai_bot'
   },
