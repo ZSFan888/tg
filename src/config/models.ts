@@ -148,3 +148,18 @@ export function pickChatModelByIntent(input: string): ModelOption {
   }
   return getRecommendedModelForTask('chat');
 }
+
+
+export function pickImageModelByIntent(input: string): ModelOption {
+  const text = input.toLowerCase();
+  const imageModels = getModelsByTask('image');
+  const highQualityKeywords = ['超清', '高清', '高质量', '细节', '写实', '电影感', 'photorealistic', 'realistic', 'detailed', 'cinematic'];
+  const fastKeywords = ['快速', '随便画', '草图', '简单', '马上', '快一点'];
+  if (highQualityKeywords.some((kw) => text.includes(kw)) || input.length > 180) {
+    return imageModels.find((m) => m.key === 'sd-xl-base') ?? imageModels[0];
+  }
+  if (fastKeywords.some((kw) => text.includes(kw))) {
+    return imageModels.find((m) => m.key === 'flux-schnell') ?? imageModels[0];
+  }
+  return getRecommendedModelForTask('image');
+}

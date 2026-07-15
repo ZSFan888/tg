@@ -14,7 +14,7 @@ import { saveFollowUps } from '../storage/followup-store';
 import { getBanRecord } from '../storage/ban-store';
 import { sanitizeMarkdown } from '../utils/markdown';
 import { transcribeAudio } from '../services/transcribe';
-import { getModelById, pickChatModelByIntent } from '../config/models';
+import { getModelById, pickChatModelByIntent, pickImageModelByIntent } from '../config/models';
 import { synthesizeSpeech } from '../services/tts';
 import { generateImage, editImage } from '../services/image';
 import { analyzeImage } from '../services/vision';
@@ -493,7 +493,7 @@ export async function runImageTurn(
 
   const prefs = await getUserPreferences(ctx.env, userId);
   const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
-  const imageModelId = selectedModel?.task === 'image' ? selectedModel.id : '@cf/black-forest-labs/flux-1-schnell';
+  const imageModelId = selectedModel?.task === 'image' ? selectedModel.id : pickImageModelByIntent(prompt).id;
 
   const placeholder = await ctx.api.sendMessage(chatId, '· 正在优化提示词并生成图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
   const optimized = await optimizeImagePrompt(ctx.env, prompt);
@@ -530,7 +530,7 @@ export async function runImageEditTurn(
 
   const prefs = await getUserPreferences(ctx.env, userId);
   const selectedModel = prefs.modelId ? getModelById(prefs.modelId) : null;
-  const imageModelId = selectedModel?.task === 'image' ? selectedModel.id : '@cf/black-forest-labs/flux-1-schnell';
+  const imageModelId = selectedModel?.task === 'image' ? selectedModel.id : pickImageModelByIntent(prompt).id;
 
   const placeholder = await ctx.api.sendMessage(chatId, '· 正在优化重绘需求并生成图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
   const optimized = await optimizeImagePrompt(ctx.env, prompt);
