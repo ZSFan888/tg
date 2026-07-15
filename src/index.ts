@@ -4,7 +4,7 @@ import { createBot } from './bot/create-bot';
 import { BOT_COMMANDS } from './bot/commands-menu';
 import { resolveEnv } from './storage/settings-store';
 import { registerAdminRoutes } from './admin/routes';
-import { isDuplicateUpdate } from './storage/update-dedup-store';
+import { isDuplicateUpdate, pruneOldUpdates } from './storage/update-dedup-store';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -34,6 +34,11 @@ app.post('/telegram/webhook', async (c) => {
     const duplicate = await isDuplicateUpdate(resolvedEnv, updateId);
     if (duplicate) {
       return c.text('OK (duplicate, skipped)', 200);
+    }
+    // D1 没有原生 TTL，这里用低概率随机触发清理，避免 update_dedup 表无限增长，
+    // 又不需要额外配置 cron trigger。
+    if (Math.random() < 0.02) {
+      c.executionCtx.waitUntil(pruneOldUpdates(resolvedEnv));
     }
   }
 

@@ -1,8 +1,4 @@
-import type { Env, RateLimitState } from '../types/env';
-
-function key(chatId: number | string) {
-  return `rl:${chatId}`;
-}
+import type { Env } from '../types/env';
 
 function limitPerMinute(env: Env) {
   const value = Number(env.RATE_LIMIT_PER_MINUTE ?? '12');
@@ -12,24 +8,33 @@ function limitPerMinute(env: Env) {
 export async function checkRateLimit(env: Env, chatId: number | string) {
   const now = Date.now();
   const limit = limitPerMinute(env);
-  const raw = await env.BOT_KV.get(key(chatId), 'json');
-  const state = raw as RateLimitState | null;
+  const idKey = String(chatId);
 
-  let nextState: RateLimitState;
-  if (!state || now >= state.resetAt) {
-    nextState = { count: 1, resetAt: now + 60_000 };
+  const row = await env.DB.prepare('SELECT count, reset_at FROM rate_limits WHERE chat_id = ?')
+    .bind(idKey)
+    .first<{ count: number; reset_at: number }>();
+
+  let nextCount: number;
+  let nextResetAt: number;
+  if (!row || now >= row.reset_at) {
+    nextCount = 1;
+    nextResetAt = now + 60_000;
   } else {
-    nextState = { count: state.count + 1, resetAt: state.resetAt };
+    nextCount = row.count + 1;
+    nextResetAt = row.reset_at;
   }
 
-  await env.BOT_KV.put(key(chatId), JSON.stringify(nextState), {
-    expirationTtl: 120
-  });
+  await env.DB.prepare(
+    `INSERT INTO rate_limits (chat_id, count, reset_at) VALUES (?, ?, ?)
+     ON CONFLICT(chat_id) DO UPDATE SET count = excluded.count, reset_at = excluded.reset_at`
+  )
+    .bind(idKey, nextCount, nextResetAt)
+    .run();
 
   return {
-    ok: nextState.count <= limit,
-    remaining: Math.max(0, limit - nextState.count),
-    resetAt: nextState.resetAt,
+    ok: nextCount <= limit,
+    remaining: Math.max(0, limit - nextCount),
+    resetAt: nextResetAt,
     limit
   };
 }

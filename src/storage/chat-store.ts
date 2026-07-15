@@ -1,8 +1,4 @@
-import type { ChatMessage, ChatState, Env } from '../types/env';
-
-function key(chatId: number | string) {
-  return `chat:${chatId}`;
-}
+import type { ChatMessage, Env } from '../types/env';
 
 function maxHistory(env: Env) {
   const value = Number(env.MAX_HISTORY ?? '8');
@@ -10,22 +6,27 @@ function maxHistory(env: Env) {
 }
 
 export async function getChatHistory(env: Env, chatId: number | string): Promise<ChatMessage[]> {
-  const raw = await env.BOT_KV.get(key(chatId), 'json');
-  const state = raw as ChatState | null;
-  return state?.messages ?? [];
+  const row = await env.DB.prepare('SELECT messages FROM chat_history WHERE chat_id = ?')
+    .bind(String(chatId))
+    .first<{ messages: string }>();
+  if (!row) return [];
+  try {
+    return JSON.parse(row.messages) as ChatMessage[];
+  } catch {
+    return [];
+  }
 }
 
 export async function saveChatHistory(env: Env, chatId: number | string, messages: ChatMessage[]) {
   const trimmed = messages.slice(-maxHistory(env));
-  const state: ChatState = {
-    messages: trimmed,
-    updatedAt: Date.now()
-  };
-  await env.BOT_KV.put(key(chatId), JSON.stringify(state), {
-    expirationTtl: 60 * 60 * 24 * 7
-  });
+  await env.DB.prepare(
+    `INSERT INTO chat_history (chat_id, messages, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(chat_id) DO UPDATE SET messages = excluded.messages, updated_at = excluded.updated_at`
+  )
+    .bind(String(chatId), JSON.stringify(trimmed), Date.now())
+    .run();
 }
 
 export async function clearChatHistory(env: Env, chatId: number | string) {
-  await env.BOT_KV.delete(key(chatId));
+  await env.DB.prepare('DELETE FROM chat_history WHERE chat_id = ?').bind(String(chatId)).run();
 }

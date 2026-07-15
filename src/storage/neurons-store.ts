@@ -32,7 +32,6 @@ export function estimateChatNeurons(modelId: string, promptTokens: number, compl
 }
 
 const DAILY_FREE_NEURONS = 10000;
-const NEURONS_KEY_PREFIX = 'neurons:';
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -45,27 +44,35 @@ interface NeuronDailyState {
   audioCalls: number;
 }
 
-function key(date: string) {
-  return `${NEURONS_KEY_PREFIX}${date}`;
-}
-
 export async function recordNeuronUsage(env: Env, amount: number, kind: 'chat' | 'audio' = 'chat') {
   const today = todayKey();
-  const raw = await env.BOT_KV.get(key(today), 'json');
-  const state = (raw as NeuronDailyState | null) ?? { date: today, total: 0, chatCalls: 0, audioCalls: 0 };
 
-  state.total += amount;
-  if (kind === 'chat') state.chatCalls += 1;
-  else state.audioCalls += 1;
+  const row = await env.DB.prepare('SELECT total, chat_calls, audio_calls FROM neuron_daily WHERE date = ?')
+    .bind(today)
+    .first<{ total: number; chat_calls: number; audio_calls: number }>();
 
-  await env.BOT_KV.put(key(today), JSON.stringify(state), { expirationTtl: 60 * 60 * 24 * 3 });
-  return state;
+  const total = (row?.total ?? 0) + amount;
+  const chatCalls = (row?.chat_calls ?? 0) + (kind === 'chat' ? 1 : 0);
+  const audioCalls = (row?.audio_calls ?? 0) + (kind === 'audio' ? 1 : 0);
+
+  await env.DB.prepare(
+    `INSERT INTO neuron_daily (date, total, chat_calls, audio_calls) VALUES (?, ?, ?, ?)
+     ON CONFLICT(date) DO UPDATE SET total = excluded.total, chat_calls = excluded.chat_calls, audio_calls = excluded.audio_calls`
+  )
+    .bind(today, total, chatCalls, audioCalls)
+    .run();
+
+  return { date: today, total, chatCalls, audioCalls };
 }
 
 export async function getTodayNeuronUsage(env: Env): Promise<NeuronDailyState> {
   const today = todayKey();
-  const raw = await env.BOT_KV.get(key(today), 'json');
-  return (raw as NeuronDailyState | null) ?? { date: today, total: 0, chatCalls: 0, audioCalls: 0 };
+  const row = await env.DB.prepare('SELECT total, chat_calls, audio_calls FROM neuron_daily WHERE date = ?')
+    .bind(today)
+    .first<{ total: number; chat_calls: number; audio_calls: number }>();
+
+  if (!row) return { date: today, total: 0, chatCalls: 0, audioCalls: 0 };
+  return { date: today, total: row.total, chatCalls: row.chat_calls, audioCalls: row.audio_calls };
 }
 
 export async function getNeuronUsageHistory(env: Env, days = 7): Promise<NeuronDailyState[]> {
@@ -75,12 +82,22 @@ export async function getNeuronUsageHistory(env: Env, days = 7): Promise<NeuronD
     d.setUTCDate(d.getUTCDate() - i);
     dates.push(d.toISOString().slice(0, 10));
   }
-  const results = await Promise.all(
-    dates.map(async (date) => {
-      const raw = await env.BOT_KV.get(key(date), 'json');
-      return (raw as NeuronDailyState | null) ?? { date, total: 0, chatCalls: 0, audioCalls: 0 };
-    })
-  );
+
+  const rows = await env.DB.prepare(
+    `SELECT date, total, chat_calls, audio_calls FROM neuron_daily WHERE date IN (${dates.map(() => '?').join(',')})`
+  )
+    .bind(...dates)
+    .all<{ date: string; total: number; chat_calls: number; audio_calls: number }>();
+
+  const byDate = new Map((rows.results ?? []).map((r) => [r.date, r]));
+
+  const results = dates.map((date) => {
+    const r = byDate.get(date);
+    return r
+      ? { date, total: r.total, chatCalls: r.chat_calls, audioCalls: r.audio_calls }
+      : { date, total: 0, chatCalls: 0, audioCalls: 0 };
+  });
+
   return results.reverse();
 }
 
