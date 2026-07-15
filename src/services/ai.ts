@@ -265,48 +265,80 @@ export async function generateReplyStream(
     let streamUsage: TokenUsage | null = null;
     let lastChunkAt = Date.now();
     let stallFallback: ReturnType<typeof setInterval> | null = null;
-    let aborted = false;
+    let stalled = false;
 
+    // 之前一旦判定 stall 就直接触发 onError，会用一条通用错误文案
+    // 覆盖掉已经生成出来的部分内容，等于把「已经吐出来的字」也一起丢了。
+    // 现在改成：判定 stall 只负责取消底层的 reader，不再直接改写显示内容，
+    // 已经攒到的 fullText 会在下面统一按「正常完成」流程处理并完整发出去。
     stallFallback = setInterval(() => {
-      if (aborted) return;
-      if (Date.now() - lastChunkAt < 15000) return;
-      aborted = true;
-      callbacks.onError(new Error('STREAM_STALLED'));
+      if (stalled) return;
+      if (Date.now() - lastChunkAt < 20000) return;
+      stalled = true;
       try { reader.cancel('stream stalled'); } catch {}
     }, 5000);
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      lastChunkAt = Date.now();
+    let streamError: unknown = null;
 
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split('\n\n');
-      buffer = parts.pop() ?? '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        lastChunkAt = Date.now();
 
-      for (const part of parts) {
-        const { delta, usage } = parseSseChunk(part);
-        if (delta) {
-          fullText += delta;
-          await callbacks.onChunk(fullText);
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+
+        for (const part of parts) {
+          const { delta, usage } = parseSseChunk(part);
+          if (delta) {
+            fullText += delta;
+            await callbacks.onChunk(fullText);
+          }
+          if (usage) streamUsage = usage;
         }
-        if (usage) streamUsage = usage;
       }
+    } catch (readErr) {
+      // 读取过程中网络中断/连接被关闭等：不要直接丢弃已生成内容，
+      // 记录错误但继续走下面的「用已有内容收尾」逻辑。
+      streamError = readErr;
     }
 
     if (stallFallback) clearInterval(stallFallback);
+
     const trailing = parseSseChunk(buffer);
     if (trailing.delta) fullText += trailing.delta;
     if (trailing.usage) streamUsage = trailing.usage;
 
-    const finalText = fullText.trim() || '我现在有点忙，请你换个问法再试一次。';
-    await callbacks.onDone(finalText);
+    const trimmed = fullText.trim();
+
+    if (!trimmed) {
+      // 完全没生成出任何内容才走真正的错误提示。
+      const summary = summarizeAiError(
+        streamError ?? new Error(stalled ? 'STREAM_STALLED' : 'STREAM_EMPTY'),
+        modelId ?? env.AI_MODEL
+      );
+      console.error('AI streaming produced no content:', summary.logDetail);
+      await callbacks.onError(streamError ?? new Error('STREAM_EMPTY'));
+      await callbacks.onDone(summary.userMessage);
+      return { text: summary.userMessage, usage: { promptTokens: 0, completionTokens: 0 } };
+    }
+
+    if (stalled || streamError) {
+      console.error(
+        'AI streaming ended early, delivering partial content as final answer:',
+        streamError ?? 'stalled'
+      );
+    }
+
+    await callbacks.onDone(trimmed);
 
     const usage = streamUsage ?? {
       promptTokens: estimateTokensFromText(messages.map((m) => m.content).join('')),
-      completionTokens: Math.max(64, estimateTokensFromText(finalText))
+      completionTokens: Math.max(64, estimateTokensFromText(trimmed))
     };
-    return { text: finalText, usage };
+    return { text: trimmed, usage };
   } catch (err) {
     const summary = summarizeAiError(err, modelId ?? env.AI_MODEL);
     console.error('AI streaming failed:', summary.logDetail);

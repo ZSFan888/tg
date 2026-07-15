@@ -241,12 +241,14 @@ export async function runAiTurn(
       return;
     },
     onError: async () => {
+      // 注意：onError 现在只在「完全没有生成出任何内容」时才会被调用，
+      // 生成到一半的内容会走 onDone 并被当作最终答案完整发出去，
+      // 所以这里始终展示错误提示是安全的，不会覆盖掉已经吐出来的文字。
       placeholderActive = false;
       clearInterval(placeholderInterval);
       streamDone = true;
       clearInterval(revealInterval);
       if (stallTimer) clearInterval(stallTimer);
-      await flushEdit('抱歉，AI 服务暂时出了点问题，请稍后再试。', true);
     }
   }, modelId);
 
