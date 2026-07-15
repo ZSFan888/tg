@@ -4,8 +4,13 @@ function key(userId: number | string) {
   return `pending:${userId}`;
 }
 
-export async function setPendingAction(env: Env, userId: number | string, action: PendingAction) {
-  const state: PendingState = { action, createdAt: Date.now() };
+export async function setPendingAction(
+  env: Env,
+  userId: number | string,
+  action: PendingAction,
+  extras: Partial<PendingState> = {}
+) {
+  const state: PendingState = { action, createdAt: Date.now(), ...extras };
   await env.BOT_KV.put(key(userId), JSON.stringify(state), { expirationTtl: 300 });
 }
 

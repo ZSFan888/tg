@@ -6,7 +6,7 @@ import { generateFollowUps } from '../services/followups';
 import { getChatHistory, saveChatHistory } from '../storage/chat-store';
 import { checkRateLimit } from '../storage/rate-limit';
 import { getUserPreferences } from '../storage/preferences-store';
-import { getPendingAction, clearPendingAction } from '../storage/pending-store';
+import { getPendingAction, clearPendingAction, setPendingAction } from '../storage/pending-store';
 import { setCustomPrompt } from '../storage/preferences-store';
 import { incrementUsage, incrementGlobalStats, incrementModelUsage } from '../storage/usage-store';
 import { registerKnownUser } from '../storage/users-store';
@@ -15,7 +15,7 @@ import { getBanRecord } from '../storage/ban-store';
 import { sanitizeMarkdown } from '../utils/markdown';
 import { transcribeAudio } from '../services/transcribe';
 import { synthesizeSpeech } from '../services/tts';
-import { generateImage } from '../services/image';
+import { generateImage, editImage } from '../services/image';
 import { resolveSystemPrompt } from '../config/personas';
 import { searchWeb, buildSearchContext } from '../services/search';
 import { recordNeuronUsage, estimateChatNeurons, WHISPER_NEURONS_PER_MINUTE } from '../storage/neurons-store';
@@ -359,6 +359,15 @@ async function runVoiceModeTurn(
   await ctx.reply(`语音摘要：${summary}`, replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined).catch(() => {});
 }
 
+async function downloadTelegramFile(ctx: BotContext, fileId: string) {
+  const file = await ctx.api.getFile(fileId);
+  if (!file.file_path) return null;
+  const fileUrl = `https://api.telegram.org/file/bot${ctx.env.BOT_TOKEN}/${file.file_path}`;
+  const res = await fetch(fileUrl);
+  if (!res.ok) return null;
+  return { bytes: new Uint8Array(await res.arrayBuffer()), mimeType: res.headers.get('content-type') ?? 'image/jpeg' };
+}
+
 export async function runImageTurn(
   ctx: BotContext,
   chatId: number,
@@ -386,6 +395,42 @@ export async function runImageTurn(
     ...(replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : {})
   }).catch(async () => {
     await ctx.reply('图片已经生成，但发送失败了，请稍后再试。');
+  });
+}
+
+export async function runImageEditTurn(
+  ctx: BotContext,
+  chatId: number,
+  userId: number,
+  prompt: string,
+  sourceFileId: string,
+  replyToMessageId: number | undefined
+) {
+  const rate = await checkRateLimit(ctx.env, chatId);
+  if (!rate.ok) {
+    await ctx.reply(`请求太频繁了，请稍后再试。限制：每分钟 ${rate.limit} 次。`);
+    return;
+  }
+
+  const placeholder = await ctx.api.sendMessage(chatId, '· 正在重绘图片…', replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : undefined);
+  const source = await downloadTelegramFile(ctx, sourceFileId);
+  if (!source) {
+    await ctx.api.editMessageText(chatId, placeholder.message_id, '抱歉，无法读取原图，请重新发送图片再试。').catch(() => {});
+    return;
+  }
+
+  const image = await editImage(ctx.env, prompt, source);
+  if (!image.ok || !image.imageBytes) {
+    await ctx.api.editMessageText(chatId, placeholder.message_id, '抱歉，图片重绘失败了，请换个修改要求再试。').catch(() => {});
+    return;
+  }
+
+  await ctx.api.deleteMessage(chatId, placeholder.message_id).catch(() => {});
+  await ctx.api.sendPhoto(chatId, new InputFile(image.imageBytes, 'ai-redraw.jpg'), {
+    caption: `图片重绘需求：${prompt.slice(0, 900)}`,
+    ...(replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : {})
+  }).catch(async () => {
+    await ctx.reply('图片已经重绘完成，但发送失败了，请稍后再试。');
   });
 }
 
@@ -430,11 +475,48 @@ export function registerMessages(bot: Bot<BotContext>) {
         await runImageTurn(ctx, ctx.chat.id, ctx.from.id, text, questionMsg.message_id);
         return;
       }
+
+      if (pending?.action === 'awaiting_image_edit_prompt' && pending.fileId) {
+        await clearPendingAction(ctx.env, ctx.from.id);
+        const questionMsg = await ctx.reply(`已收到你的重绘需求：${text}`);
+        await runImageEditTurn(ctx, ctx.chat.id, ctx.from.id, text, pending.fileId, questionMsg.message_id);
+        return;
+      }
     }
 
     const messageId = ctx.message?.message_id ?? ctx.editedMessage?.message_id;
 
     await runAiTurn(ctx, ctx.chat.id, ctx.from.id, text, messageId, { editedNotice: isEdited });
+  });
+
+  bot.on('message:photo', async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
+
+    const ban = await getBanRecord(ctx.env, ctx.from.id);
+    if (ban) {
+      const until = ban.until ? new Date(ban.until).toLocaleString('zh-CN') : '永久';
+      await ctx.reply(`你已被限制使用这个机器人。
+解除时间：${until}${ban.reason ? `
+原因：${ban.reason}` : ''}`);
+      return;
+    }
+
+    await registerKnownUser(
+      ctx.env,
+      ctx.from.id,
+      ctx.chat.id,
+      ctx.from.username,
+      ctx.from.first_name
+    );
+
+    const photos = ctx.message?.photo;
+    const fileId = photos?.[photos.length - 1]?.file_id;
+    if (!fileId) return;
+
+    await setPendingAction(ctx.env, ctx.from.id, 'awaiting_image_edit_prompt', { fileId });
+    await ctx.reply(`我已经收到这张图。\n现在告诉我你想怎么改，比如：把背景换成雪山、改成动漫风、保留人物换衣服。`, {
+      reply_parameters: { message_id: ctx.message!.message_id }
+    });
   });
 
   bot.on(['message:voice', 'message:audio'], async (ctx) => {

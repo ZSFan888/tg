@@ -75,9 +75,11 @@ export interface BanRecord {
   reason?: string;
 }
 
-export type PendingAction = 'awaiting_custom_prompt' | 'awaiting_image_prompt';
+export type PendingAction = 'awaiting_custom_prompt' | 'awaiting_image_prompt' | 'awaiting_image_edit_prompt';
 
 export interface PendingState {
   action: PendingAction;
   createdAt: number;
+  fileId?: string;
+  mimeType?: string;
 }

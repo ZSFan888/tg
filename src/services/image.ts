@@ -46,3 +46,41 @@ export async function generateImage(env: Env, prompt: string): Promise<ImageGene
     return { ok: false, error: 'generation_failed' };
   }
 }
+
+
+export interface ImageEditInput {
+  bytes: Uint8Array;
+  mimeType?: string;
+}
+
+export async function editImage(env: Env, prompt: string, input: ImageEditInput): Promise<ImageGenerationResult> {
+  try {
+    const form = new FormData();
+    form.set('prompt', prompt);
+    const arrayBuffer = input.bytes.buffer.slice(input.bytes.byteOffset, input.bytes.byteOffset + input.bytes.byteLength) as ArrayBuffer;
+    form.set('input_image_0', new Blob([arrayBuffer], { type: input.mimeType ?? 'image/jpeg' }), 'input-image');
+
+    const response = await (env.AI.run as any)('@cf/black-forest-labs/flux-2-klein-9b', { multipart: form });
+
+    if (response instanceof ReadableStream) {
+      const res = new Response(response);
+      const imageBytes = new Uint8Array(await res.arrayBuffer());
+      return { ok: true, imageBytes, mimeType: res.headers.get('content-type') ?? 'image/jpeg' };
+    }
+
+    if (typeof response === 'string') {
+      return dataUriToBytes(response);
+    }
+
+    if (response && typeof response === 'object') {
+      const data = response as Record<string, unknown>;
+      if (typeof data.result === 'string') return dataUriToBytes(data.result);
+      if (typeof data.image === 'string') return dataUriToBytes(data.image);
+    }
+
+    return { ok: false, error: 'unsupported_response' };
+  } catch (err) {
+    console.error('Image edit failed:', err);
+    return { ok: false, error: 'edit_failed' };
+  }
+}

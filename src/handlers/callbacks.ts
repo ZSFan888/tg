@@ -76,7 +76,8 @@ export function registerCallbacks(bot: Bot<BotContext>) {
   bot.callbackQuery('menu:image', async (ctx) => {
     if (!ctx.from) return;
     await ctx.answerCallbackQuery();
-    await ctx.reply('请直接发送：/image 你的图片描述\n例如：/image 一只穿宇航服的柴犬站在月球上');
+    await setPendingAction(ctx.env, ctx.from.id, 'awaiting_image_prompt');
+    await ctx.reply('请告诉我你想生成什么图。\n如果你是想重绘现有图片，也可以直接先发一张图给我，然后再描述你想怎么改。');
   });
 
   bot.callbackQuery('menu:voice', async (ctx) => {

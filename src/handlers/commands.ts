@@ -70,7 +70,7 @@ export function registerCommands(bot: Bot<BotContext>) {
       '· 开始聊天 / 偏好设置 / 切换模型 / 联网搜索',
       '· AI 生图 / 语音回复 / 清空上下文 / 使用统计 / 导出记录',
       '',
-      '也可以直接发送文字或语音消息，我会自动回复。'
+      '也可以直接发送文字、语音，或者先发图片再告诉我怎么改，我会自动回复。'
     ];
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
