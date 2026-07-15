@@ -62,13 +62,13 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
         key: 'webhook_connected',
         label: 'Webhook 连接',
         ok: webhookOk,
-        detail: webhookOk ? '已连接到 Telegram' : '尚未注册或连接失败'
+        detail: webhookOk ? '已连接到 Telegram' : '未检测到有效 Webhook 或连接失败'
       },
       {
         key: 'admin_ids',
         label: '管理员用户 ID',
         ok: Boolean(env.ADMIN_USER_IDS),
-        detail: env.ADMIN_USER_IDS ? '已配置' : '未配置，管理员命令不可用'
+        detail: env.ADMIN_USER_IDS ? '已配置' : '未配置，机器人管理命令不可用'
       },
       {
         key: 'ai_model',
@@ -78,7 +78,7 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
       },
       {
         key: 'group_mention',
-        label: '群聊@限制（可选）',
+        label: '群聊触发限制（可选）',
         ok: true,
         detail: env.GROUP_MENTION_REQUIRED === 'true' ? '已开启，群聊中只有被@或回复机器人时才会响应' : '未开启，群聊中会按现有消息处理规则正常响应',
         optional: true

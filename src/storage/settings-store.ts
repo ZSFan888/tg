@@ -33,7 +33,7 @@ export const SETTINGS_META: SettingMeta[] = [
   {
     key: 'SYSTEM_PROMPT',
     label: '默认系统提示词',
-    description: '用户没有选择任何风格时使用的默认系统提示词（一般不需要改，风格已经在 /settings 里管理）',
+    description: '用户没有选择任何风格时使用的默认系统提示词（一般不需要修改，常用风格可在偏好设置中切换）',
     type: 'textarea'
   },
   {

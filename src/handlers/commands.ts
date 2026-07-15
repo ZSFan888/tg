@@ -48,7 +48,7 @@ export function registerCommands(bot: Bot<BotContext>) {
       .text('使用统计', 'menu:usage')
       .row()
       .text('导出记录', 'menu:export')
-      .text('我的ID', 'menu:myid')
+.text('我的 ID', 'menu:myid')
       .row()
       .text('系统状态', 'menu:ping')
       .text('帮助说明', 'menu:help');
@@ -67,9 +67,9 @@ export function registerCommands(bot: Bot<BotContext>) {
     const lines = [
       '发送 /start 可以打开功能菜单，里面的按钮包含了绝大部分功能：',
       '· 开始聊天 / 偏好设置 / 切换模型 / AI 生图',
-      '· 语音回复 / 语音模式 / 清空上下文 / 使用统计 / 导出记录',
+      '· 语音回复 / 语音模式 / 清空上下文 / 使用统计 / 导出记录 / 我的 ID',
       '',
-      '也可以直接发送文字、语音，或者先发图片再告诉我怎么改，我会自动回复。'
+      '也可以直接发送文字、语音，或先发图片再描述修改需求；我会自动识别并回复。'
     ];
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {

@@ -174,20 +174,20 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       '· 直接发消息即可聊天',
       '· 偏好设置 - 切换回复风格/自定义提示词',
       '· 切换模型 - 选择不同能力/速度的 AI 模型',
-      '· AI 生图 - 直接文生图，也支持先发图再描述修改需求',
+      '· AI 生图 - 支持直接文生图，也支持先发图再描述修改需求',
       '· 清空上下文 - 重置当前会话记忆',
       '· 使用统计 - 查看今日使用次数和限流',
       '· 导出记录 - 把当前对话保存为文本文件',
-      '· 我的ID - 查看你的 Telegram 用户 ID / 会话 ID',
+      '· 我的 ID - 查看你的 Telegram 用户 ID / 会话 ID',
       '· 系统状态 - 检测机器人是否在线及响应延迟',
       '',
-      '也可以直接发送语音消息；开启语音模式后，我会优先直接回语音。'
+      '也可以直接发送语音消息；开启语音模式后，我会优先回语音。'
     ];
 
     if (ctx.from && isAdmin(ctx.env, ctx.from.id)) {
       lines.push(
         '',
-        '管理员专用（仍需直接输入命令）：',
+        '管理员功能（以下仍需直接输入命令）：',
         '/stats - 查看全局使用统计',
         '/neurons - 查看今日 Neurons 用量预估',
         '/broadcast <内容> - 群发通知给所有已知用户',
@@ -211,7 +211,7 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       .text('Neurons 用量', 'menu:neurons');
 
     await ctx.reply(
-      '管理员选项：\n· 全局统计 / Neurons 用量可直接点按钮查看\n· 群发、禁用/解禁用户仍需输入命令：\n  /broadcast <内容>\n  /ban <用户ID> [分钟数] [原因]\n  /unban <用户ID>',
+      '管理员选项：\n· 全局统计 / Neurons 用量可直接点按钮查看\n· 群发、禁用、解禁用户仍需手动输入命令：\n  /broadcast <内容>\n  /ban <用户ID> [分钟数] [原因]\n  /unban <用户ID>',
       { reply_markup: keyboard }
     );
   });
