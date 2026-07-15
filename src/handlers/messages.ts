@@ -158,12 +158,15 @@ export async function runAiTurn(
 
     let rest = fullText.slice(TELEGRAM_MAX_LEN);
     while (rest.length > 0) {
-      const part = rest.slice(0, TELEGRAM_MAX_LEN);
-      rest = rest.slice(TELEGRAM_MAX_LEN);
+      let cut = rest.lastIndexOf('\n\n', TELEGRAM_MAX_LEN);
+      if (cut < 500) cut = Math.min(TELEGRAM_MAX_LEN, rest.length);
+      const part = rest.slice(0, cut);
+      rest = rest.slice(cut).replace(/^\n+/, '');
       try {
         await ctx.api.sendMessage(chatId, part);
       } catch (err) {
         console.error('Failed to send overflow message part:', err);
+        break;
       }
     }
   }
@@ -234,6 +237,7 @@ export async function runAiTurn(
       if (stallTimer) clearInterval(stallTimer);
       revealedLength = targetText.length;
       await sendFinalText(sanitizeMarkdown(targetText));
+      return;
     },
     onError: async () => {
       placeholderActive = false;
