@@ -39,6 +39,16 @@ const REVEAL_CATCHUP_RATIO = 0.35;
 // 无论差距大小，每次至少往前露出这么多字符，避免长时间停滞不前。
 const REVEAL_MIN_CHARS = 2;
 
+
+function detectAutoTask(text: string): 'image' | 'chat' {
+  const normalized = text.trim().toLowerCase();
+  const imageKeywords = [
+    '画', '画一张', '生成图片', '生成一张图', '生图', '做一张图', '帮我画', '出图', '海报', '封面图', 'logo', '插画',
+    'draw', 'generate image', 'create image', 'make an image', 'illustration', 'poster', 'logo', 'thumbnail'
+  ];
+  return imageKeywords.some((kw) => normalized.includes(kw)) ? 'image' : 'chat';
+}
+
 interface RunAiTurnOptions {
   historyOverride?: ChatMessage[];
   isRegenerate?: boolean;
@@ -548,6 +558,8 @@ export function registerMessages(bot: Bot<BotContext>) {
       ctx.from.first_name
     );
 
+    const prefs = await getUserPreferences(ctx.env, ctx.from.id);
+
     if (!isEdited) {
       const pending = await getPendingAction(ctx.env, ctx.from.id);
       if (pending?.action === 'awaiting_custom_prompt') {
@@ -573,6 +585,16 @@ export function registerMessages(bot: Bot<BotContext>) {
     }
 
     const messageId = ctx.message?.message_id ?? ctx.editedMessage?.message_id;
+
+    const autoRoutingEnabled = prefs.autoTaskRouting !== false;
+    if (!isEdited && autoRoutingEnabled) {
+      const detectedTask = detectAutoTask(text);
+      if (detectedTask === 'image') {
+        const questionMsg = await ctx.reply(`已自动识别为生图需求：${text}`);
+        await runImageTurn(ctx, ctx.chat.id, ctx.from.id, text, questionMsg.message_id);
+        return;
+      }
+    }
 
     await runAiTurn(ctx, ctx.chat.id, ctx.from.id, text, messageId, { editedNotice: isEdited });
   });

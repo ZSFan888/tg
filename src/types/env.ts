@@ -45,6 +45,7 @@ export interface UserPreferences {
   activeTask?: ModelTask;
   voiceReplyEnabled?: boolean;
   voiceModeEnabled?: boolean;
+  autoTaskRouting?: boolean;
   updatedAt: number;
 }
 
