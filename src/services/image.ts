@@ -10,6 +10,79 @@ export interface ImageGenerationResult {
 }
 
 
+
+function normalizeBase64ImageString(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('data:image/')) return trimmed;
+  const looksLikeBase64 = /^[A-Za-z0-9+/=\r\n]+$/.test(trimmed) && trimmed.length > 64;
+  if (!looksLikeBase64) return null;
+  return `data:image/jpeg;base64,${trimmed.replace(/\s+/g, '')}`;
+}
+
+async function binaryLikeToResult(input: unknown, defaultMimeType = 'image/jpeg'): Promise<ImageGenerationResult | null> {
+  if (input instanceof Response) {
+    const imageBytes = new Uint8Array(await input.arrayBuffer());
+    return { ok: true, imageBytes, mimeType: input.headers.get('content-type') ?? defaultMimeType };
+  }
+
+  if (input instanceof ReadableStream) {
+    const response = new Response(input);
+    const imageBytes = new Uint8Array(await response.arrayBuffer());
+    return { ok: true, imageBytes, mimeType: response.headers.get('content-type') ?? defaultMimeType };
+  }
+
+  if (input instanceof Uint8Array) {
+    return { ok: true, imageBytes: input, mimeType: defaultMimeType };
+  }
+
+  if (input instanceof ArrayBuffer) {
+    return { ok: true, imageBytes: new Uint8Array(input), mimeType: defaultMimeType };
+  }
+
+  if (typeof Blob !== 'undefined' && input instanceof Blob) {
+    const imageBytes = new Uint8Array(await input.arrayBuffer());
+    return { ok: true, imageBytes, mimeType: input.type || defaultMimeType };
+  }
+
+  return null;
+}
+
+async function parseImageResult(result: unknown, defaultMimeType = 'image/jpeg'): Promise<ImageGenerationResult> {
+  const direct = await binaryLikeToResult(result, defaultMimeType);
+  if (direct) return direct;
+
+  if (typeof result === 'string') {
+    const normalized = normalizeBase64ImageString(result);
+    if (normalized) return dataUriToBytes(normalized);
+    return { ok: false, error: 'unsupported_response', errorMessage: '模型返回了无法识别的字符串图片格式' };
+  }
+
+  if (result && typeof result === 'object') {
+    const data = result as Record<string, unknown>;
+    for (const key of ['result', 'image', 'output', 'data']) {
+      const value = data[key];
+      const nested = await binaryLikeToResult(value, defaultMimeType);
+      if (nested) return nested;
+      if (typeof value === 'string') {
+        const normalized = normalizeBase64ImageString(value);
+        if (normalized) return dataUriToBytes(normalized);
+      }
+      if (value && typeof value === 'object' && 'image' in (value as Record<string, unknown>)) {
+        const inner = (value as Record<string, unknown>).image;
+        const nestedInner = await binaryLikeToResult(inner, defaultMimeType);
+        if (nestedInner) return nestedInner;
+        if (typeof inner === 'string') {
+          const normalized = normalizeBase64ImageString(inner);
+          if (normalized) return dataUriToBytes(normalized);
+        }
+      }
+    }
+  }
+
+  return { ok: false, error: 'unsupported_response', errorMessage: '模型返回了无法识别的图片结果格式' };
+}
+
 function summarizeImageError(err: unknown): { error: string; errorMessage: string; httpStatus?: number } {
   if (err instanceof Error) {
     const message = err.message || 'unknown_error';
@@ -57,23 +130,7 @@ export async function generateImage(env: Env, prompt: string): Promise<ImageGene
       steps: 4
     });
 
-    if (result instanceof ReadableStream) {
-      const response = new Response(result);
-      const imageBytes = new Uint8Array(await response.arrayBuffer());
-      return { ok: true, imageBytes, mimeType: response.headers.get('content-type') ?? 'image/jpeg' };
-    }
-
-    if (typeof result === 'string') {
-      return dataUriToBytes(result);
-    }
-
-    if (result && typeof result === 'object') {
-      const data = result as Record<string, unknown>;
-      if (typeof data.result === 'string') return dataUriToBytes(data.result);
-      if (typeof data.image === 'string') return dataUriToBytes(data.image);
-    }
-
-    return { ok: false, error: 'unsupported_response', errorMessage: '模型返回了无法识别的图片结果格式' };
+    return await parseImageResult(result, 'image/jpeg');
   } catch (err) {
     const detail = summarizeImageError(err);
     console.error('Image generation failed:', { prompt, ...detail, raw: err instanceof Error ? err.message : String(err) });
@@ -96,23 +153,11 @@ export async function editImage(env: Env, prompt: string, input: ImageEditInput)
 
     const response = await (env.AI.run as any)('@cf/black-forest-labs/flux-2-klein-9b', { multipart: form });
 
-    if (response instanceof ReadableStream) {
-      const res = new Response(response);
-      const imageBytes = new Uint8Array(await res.arrayBuffer());
-      return { ok: true, imageBytes, mimeType: res.headers.get('content-type') ?? 'image/jpeg' };
+    const parsed = await parseImageResult(response, 'image/jpeg');
+    if (!parsed.ok && parsed.error === 'unsupported_response') {
+      return { ...parsed, errorMessage: '模型返回了无法识别的重绘结果格式' };
     }
-
-    if (typeof response === 'string') {
-      return dataUriToBytes(response);
-    }
-
-    if (response && typeof response === 'object') {
-      const data = response as Record<string, unknown>;
-      if (typeof data.result === 'string') return dataUriToBytes(data.result);
-      if (typeof data.image === 'string') return dataUriToBytes(data.image);
-    }
-
-    return { ok: false, error: 'unsupported_response', errorMessage: '模型返回了无法识别的重绘结果格式' };
+    return parsed;
   } catch (err) {
     const detail = summarizeImageError(err);
     console.error('Image edit failed:', { prompt, ...detail, raw: err instanceof Error ? err.message : String(err) });
