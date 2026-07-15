@@ -51,6 +51,13 @@ function readResponse(result: unknown): string {
   const data = result as Record<string, unknown>;
   if (typeof data.response === 'string') return data.response;
   if (typeof data.text === 'string') return data.text;
+  if (Array.isArray(data.choices) && data.choices.length > 0) {
+    // OpenAI-compatible non-streaming format used by newer models
+    // (GLM, Kimi, GPT-OSS, Nemotron, etc.): choices[0].message.content
+    const choice = data.choices[0] as Record<string, unknown>;
+    const message = choice?.message as Record<string, unknown> | undefined;
+    if (typeof message?.content === 'string') return message.content;
+  }
   if (Array.isArray(data.result)) {
     return data.result
       .map((item) => (typeof item === 'string' ? item : ''))
@@ -191,7 +198,14 @@ function parseSseChunk(chunk: string): { delta: string; usage: TokenUsage | null
     if (payload === '[DONE]' || !payload) continue;
     try {
       const json = JSON.parse(payload);
-      if (typeof json.response === 'string') text += json.response;
+      if (typeof json.response === 'string') {
+        text += json.response;
+      } else if (Array.isArray(json.choices) && json.choices.length > 0) {
+        // OpenAI-compatible streaming format used by newer models
+        // (GLM, Kimi, GPT-OSS, Nemotron, etc.): choices[0].delta.content
+        const delta = json.choices[0]?.delta;
+        if (typeof delta?.content === 'string') text += delta.content;
+      }
       if (json.usage) {
         usage = readUsage({ usage: json.usage });
       }
