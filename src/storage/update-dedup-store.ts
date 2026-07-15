@@ -4,21 +4,24 @@ import type { Env } from '../types/env';
  * Returns true if this update_id has already been processed recently
  * (i.e. it's a Telegram retry of a webhook that timed out), and marks
  * it as seen for future calls.
+ *
+ * Uses "INSERT OR IGNORE" + checking rows written instead of a separate
+ * SELECT-then-INSERT, because the old two-step approach has a race
+ * condition: if Telegram (or a slow response) causes two webhook calls
+ * for the same update_id to run concurrently, both could pass the SELECT
+ * check before either finishes the INSERT, and the message would still
+ * get answered twice. A single atomic INSERT avoids that window entirely.
  */
 export async function isDuplicateUpdate(env: Env, updateId: number): Promise<boolean> {
-  const existing = await env.DB.prepare('SELECT 1 FROM update_dedup WHERE update_id = ?')
-    .bind(updateId)
-    .first();
-
-  if (existing) {
-    return true;
-  }
-
-  await env.DB.prepare('INSERT INTO update_dedup (update_id, seen_at) VALUES (?, ?)')
+  const result = await env.DB.prepare(
+    'INSERT OR IGNORE INTO update_dedup (update_id, seen_at) VALUES (?, ?)'
+  )
     .bind(updateId, Date.now())
     .run();
 
-  return false;
+  // meta.changes === 0 means the row already existed (INSERT was ignored),
+  // i.e. this update_id was already processed before.
+  return result.meta.changes === 0;
 }
 
 /**
