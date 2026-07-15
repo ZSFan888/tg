@@ -33,8 +33,13 @@ function summarizeAiError(err: unknown, modelId: string): { userMessage: string;
     userMessage = '抱歉，请求参数或上下文长度不适合当前模型；请换个模型，或先清空上下文后再试。';
   }
 
+  // 临时调试：把原始错误摘要附加到用户可见的提示里，方便快速定位到底是
+  // 网络异常、参数不兼容还是权限问题，而不用去翻 Cloudflare 后台日志。
+  // 定位完成后应移除这行 debugSuffix 拼接。
+  const debugSuffix = raw ? `\n\n[调试信息] ${raw.slice(0, 200)}` : '';
+
   return {
-    userMessage,
+    userMessage: `${userMessage}${debugSuffix}`,
     logDetail: {
       modelId,
       category,
@@ -287,10 +292,10 @@ export async function generateReplyStream(
     };
     return { text: finalText, usage };
   } catch (err) {
-    console.error('AI streaming failed:', err);
+    const summary = summarizeAiError(err, modelId ?? env.AI_MODEL);
+    console.error('AI streaming failed:', summary.logDetail);
     await callbacks.onError(err);
-    const fallback = '抱歉，AI 服务暂时出了点问题，请稍后再试。';
-    await callbacks.onDone(fallback);
-    return { text: fallback, usage: { promptTokens: 0, completionTokens: 0 } };
+    await callbacks.onDone(summary.userMessage);
+    return { text: summary.userMessage, usage: { promptTokens: 0, completionTokens: 0 } };
   }
 }
