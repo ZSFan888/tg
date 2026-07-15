@@ -140,6 +140,31 @@ export async function runAiTurn(
     }
   }
 
+  // Telegram 单条消息最大约 4096 字符；完整回答超出时，先把开头编辑进占位消息，
+  // 剩余部分再作为新消息续发，避免因为一次性编辑超长文本失败而导致回答被截断。
+  const TELEGRAM_MAX_LEN = 4000;
+
+  async function sendFinalText(fullText: string) {
+    if (fullText.length <= TELEGRAM_MAX_LEN) {
+      await flushEdit(fullText, true);
+      return;
+    }
+
+    const firstPart = fullText.slice(0, TELEGRAM_MAX_LEN);
+    await flushEdit(firstPart, true);
+
+    let rest = fullText.slice(TELEGRAM_MAX_LEN);
+    while (rest.length > 0) {
+      const part = rest.slice(0, TELEGRAM_MAX_LEN);
+      rest = rest.slice(TELEGRAM_MAX_LEN);
+      try {
+        await ctx.api.sendMessage(chatId, part);
+      } catch (err) {
+        console.error('Failed to send overflow message part:', err);
+      }
+    }
+  }
+
   // 打字机效果：目标文本（targetText）由 AI 流式返回随时更新，实际展示
   // 的文本（revealedLength）通过独立的定时器逐步逼近目标，而不是每次
   // 收到网络分片就立刻整段刷屏。这样即使上游一次性推来一大段文字，
@@ -190,7 +215,7 @@ export async function runAiTurn(
       streamDone = true;
       clearInterval(revealInterval);
       revealedLength = targetText.length;
-      await flushEdit(sanitizeMarkdown(targetText), true);
+      await sendFinalText(sanitizeMarkdown(targetText));
     },
     onError: async () => {
       placeholderActive = false;
