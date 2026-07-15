@@ -5,7 +5,6 @@ export interface SettingsOverride {
   SYSTEM_PROMPT?: string;
   MAX_HISTORY?: string;
   RATE_LIMIT_PER_MINUTE?: string;
-  TAVILY_API_KEY?: string;
   GROUP_MENTION_REQUIRED?: string;
   BOT_USERNAME?: string;
   ADMIN_USER_IDS?: string;
@@ -50,14 +49,6 @@ export const SETTINGS_META: SettingMeta[] = [
     description: '每个聊天每分钟最多可以发送多少次请求',
     type: 'number',
     placeholder: '12'
-  },
-  {
-    key: 'TAVILY_API_KEY',
-    label: 'Tavily 搜索 API Key',
-    description: '用于 /websearch 联网搜索功能，留空则联网搜索不可用',
-    type: 'text',
-    sensitive: true,
-    placeholder: 'tvly-xxxxxxxxxxxx'
   },
   {
     key: 'GROUP_MENTION_REQUIRED',

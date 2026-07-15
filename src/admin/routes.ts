@@ -77,13 +77,6 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
         detail: env.AI_MODEL || '未配置'
       },
       {
-        key: 'web_search',
-        label: '联网搜索（可选）',
-        ok: Boolean(env.TAVILY_API_KEY),
-        detail: env.TAVILY_API_KEY ? '已配置' : '未配置（可选功能，不影响基础使用）',
-        optional: true
-      },
-      {
         key: 'group_mention',
         label: '群聊@限制（可选）',
         ok: true,
@@ -181,7 +174,6 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>) {
       totalUsers: users.length,
       todayMessages: globalStats.messageCount,
       currentModel: env.AI_MODEL,
-      webSearchConfigured: Boolean(env.TAVILY_API_KEY),
       groupMentionRequired: env.GROUP_MENTION_REQUIRED === 'true',
       rateLimitPerMinute: Number(env.RATE_LIMIT_PER_MINUTE ?? '12'),
       maxHistory: Number(env.MAX_HISTORY ?? '8')

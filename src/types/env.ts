@@ -10,7 +10,6 @@ export interface Env {
   RATE_LIMIT_PER_MINUTE?: string;
   BOT_KV: KVNamespace;
   AI: Ai;
-  TAVILY_API_KEY?: string;
   GROUP_MENTION_REQUIRED?: string;
   BOT_USERNAME?: string;
 }
