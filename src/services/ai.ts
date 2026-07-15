@@ -263,10 +263,22 @@ export async function generateReplyStream(
     let fullText = '';
     let buffer = '';
     let streamUsage: TokenUsage | null = null;
+    let lastChunkAt = Date.now();
+    let stallFallback: ReturnType<typeof setInterval> | null = null;
+    let aborted = false;
+
+    stallFallback = setInterval(() => {
+      if (aborted) return;
+      if (Date.now() - lastChunkAt < 15000) return;
+      aborted = true;
+      callbacks.onError(new Error('STREAM_STALLED'));
+      try { reader.cancel('stream stalled'); } catch {}
+    }, 5000);
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      lastChunkAt = Date.now();
 
       buffer += decoder.decode(value, { stream: true });
       const parts = buffer.split('\n\n');
@@ -282,6 +294,7 @@ export async function generateReplyStream(
       }
     }
 
+    if (stallFallback) clearInterval(stallFallback);
     const trailing = parseSseChunk(buffer);
     if (trailing.delta) fullText += trailing.delta;
     if (trailing.usage) streamUsage = trailing.usage;
@@ -291,7 +304,7 @@ export async function generateReplyStream(
 
     const usage = streamUsage ?? {
       promptTokens: estimateTokensFromText(messages.map((m) => m.content).join('')),
-      completionTokens: estimateTokensFromText(finalText)
+      completionTokens: Math.max(64, estimateTokensFromText(finalText))
     };
     return { text: finalText, usage };
   } catch (err) {
