@@ -271,9 +271,18 @@ export async function generateReplyStream(
     // 覆盖掉已经生成出来的部分内容，等于把「已经吐出来的字」也一起丢了。
     // 现在改成：判定 stall 只负责取消底层的 reader，不再直接改写显示内容，
     // 已经攒到的 fullText 会在下面统一按「正常完成」流程处理并完整发出去。
+    //
+    // 之前这里的阈值是 20 秒，对大模型（70B / GLM / Kimi 等）来说太短了——
+    // 这些模型在生成长回答时，两个 token 之间偶尔会有十几秒的停顿（排队、
+    // 算力繁忙），并不代表真的卡死。20 秒的阈值会把这种正常的慢生成误判为
+    // "已经结束"，只把已经生成出来的一半内容发给用户，导致回答看起来
+    // "没说完"。Cloudflare Workers 在等待网络 I/O（没有占用 CPU 时间）时
+    // 没有严格的墙钟超时限制，所以把阈值放宽到 60 秒更安全，能覆盖绝大多数
+    // 模型排队/限速导致的短暂停顿，同时仍然能在真正掉线/卡死时兜底收尾。
+    const STALL_TIMEOUT_MS = 60000;
     stallFallback = setInterval(() => {
       if (stalled) return;
-      if (Date.now() - lastChunkAt < 20000) return;
+      if (Date.now() - lastChunkAt < STALL_TIMEOUT_MS) return;
       stalled = true;
       try { reader.cancel('stream stalled'); } catch {}
     }, 5000);

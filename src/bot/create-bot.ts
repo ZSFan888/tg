@@ -23,6 +23,6 @@ export function createBot(env: Env, waitUntil: (promise: Promise<unknown>) => vo
 
   return {
     bot,
-    handleUpdate: webhookCallback(bot, 'cloudflare-mod')
+    handleUpdate: webhookCallback(bot, 'cloudflare-mod', { timeoutMilliseconds: 60000 })
   };
 }
