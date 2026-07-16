@@ -1,6 +1,39 @@
 import type { ChatMessage, Env } from '../types/env';
-import { getMaxTokensForModel } from '../config/models';
+import { getMaxTokensForModel, getModelById } from '../config/models';
 
+
+
+function isGroqModel(modelId: string): boolean {
+  return getModelById(modelId).provider === 'groq';
+}
+
+async function runGroqChat(env: Env, messages: Array<{ role: string; content: string }>, modelId: string, stream = false) {
+  if (!env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
+  const maxTokens = getMaxTokensForModel(modelId);
+  const body: Record<string, unknown> = {
+    model: modelId,
+    messages,
+    stream
+  };
+  if (/gpt-oss/i.test(modelId)) body.max_completion_tokens = maxTokens;
+  else body.max_tokens = maxTokens;
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${env.GROQ_API_KEY}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const raw = await res.text();
+    throw new Error(`${res.status}: ${raw}`);
+  }
+
+  return stream ? res.body ?? new ReadableStream() : await res.json();
+}
 
 function summarizeAiError(err: unknown, modelId: string): { userMessage: string; logDetail: Record<string, unknown> } {
   const raw = err instanceof Error ? err.message : String(err);
@@ -175,7 +208,9 @@ export async function generateReply(
 
   try {
     const resolvedModelId = modelId ?? env.AI_MODEL;
-    const result = await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId));
+    const result = isGroqModel(resolvedModelId)
+      ? await runGroqChat(env, messages, resolvedModelId, false)
+      : await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId));
     const output = readResponse(result).trim();
     const text = output || '我现在有点忙，请你换个问法再试一次。';
     const usage = readUsage(result) ?? {
@@ -243,7 +278,9 @@ export async function generateReplyStream(
 
   try {
     const resolvedModelId = modelId ?? env.AI_MODEL;
-    const result = await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId, true));
+    const result = isGroqModel(resolvedModelId)
+      ? await runGroqChat(env, messages, resolvedModelId, true)
+      : await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId, true));
 
     if (!(result instanceof ReadableStream)) {
       const fallback = readResponse(result).trim() || '我现在有点忙，请你换个问法再试一次。';

@@ -13,6 +13,7 @@ export interface Env {
   RATE_LIMIT_PER_MINUTE?: string;
   DB: D1Database;
   AI: Ai;
+  GROQ_API_KEY?: string;
   GROUP_MENTION_REQUIRED?: string;
   BOT_USERNAME?: string;
 }
