@@ -7,7 +7,7 @@ import { getUserPreferences, setUserPersona, setUserModel, setVoiceReplyEnabled,
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
-import { MODELS, PROVIDERS, TASKS, getModelById, getModelByKey, getModelsByProvider, getModelsByTask, getProviderByKey, getTaskByKey } from '../config/models';
+import { MODELS, TASKS, getModelById, getModelByKey, getModelsByProvider, getModelsByTask, getProviderByKey, getProvidersByTask, getTaskByKey } from '../config/models';
 import { getFollowUps } from '../storage/followup-store';
 import { runAiTurn, runImageTurn } from './messages';
 import { isAdmin } from '../utils/access';
@@ -48,15 +48,39 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     const task = getTaskByKey(taskKey);
     if (!task) return;
 
-    const models = getModelsByTask(taskKey);
+    const providers = getProvidersByTask(taskKey);
+    const keyboard = new InlineKeyboard();
+    for (const provider of providers) {
+      const count = getModelsByProvider(provider.key).filter((m) => m.task === taskKey).length;
+      keyboard.text(`${provider.label}（${count}）`, `modelprovider:${taskKey}:${provider.key}`).row();
+    }
+    keyboard.text('« 返回任务类型', 'menu:model');
+
+    await ctx.reply(`${task.label}模型：
+
+先选择服务商：`, { reply_markup: keyboard });
+  });
+
+  bot.callbackQuery(/^modelprovider:([^:]+):([^:]+)$/, async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.answerCallbackQuery();
+
+    const taskKey = ctx.match[1] as ModelTask;
+    const providerKey = ctx.match[2];
+    const task = getTaskByKey(taskKey);
+    const provider = getProviderByKey(providerKey);
+    if (!task || !provider) return;
+
+    const models = getModelsByProvider(providerKey).filter((m) => m.task === taskKey);
     const keyboard = new InlineKeyboard();
     for (const [index, model] of models.entries()) {
       const prefix = index === 0 ? '★ ' : `${index + 1}. `;
       keyboard.text(`${prefix}${model.label}`, `model:${model.key}`).row();
     }
+    keyboard.text('« 返回服务商', `modeltask:${taskKey}`).row();
     keyboard.text('« 返回任务类型', 'menu:model');
 
-    await ctx.reply(`${task.label}模型：
+    await ctx.reply(`${task.label} / ${provider.label}
 
 选择一个模型：`, { reply_markup: keyboard });
   });

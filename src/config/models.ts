@@ -8,6 +8,7 @@ export interface ModelOption {
   provider: string;
   task: ModelTask;
   deprecated?: boolean;
+  freePlanOnly?: boolean;
   recommendedRank: number;
   speedRank?: number;
   qualityRank?: number;
@@ -69,11 +70,11 @@ export const MODELS: ModelOption[] = [
   { key: 'gptoss120b', id: '@cf/openai/gpt-oss-120b', label: 'GPT-OSS 120B', note: '复杂任务更强', provider: 'openai', task: 'chat', recommendedRank: 11, speedRank: 4, qualityRank: 2, maxTokens: 8000 },
   { key: 'gptoss20b', id: '@cf/openai/gpt-oss-20b', label: 'GPT-OSS 20B', note: '更快的开源 OpenAI 模型', provider: 'openai', task: 'chat', recommendedRank: 12, speedRank: 4, qualityRank: 4, maxTokens: 8000 },
   { key: 'deepseek-r1-32b', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', label: 'DeepSeek R1 Distill 32B', note: '数学逻辑更强', provider: 'deepseek', task: 'chat', recommendedRank: 13, speedRank: 12, qualityRank: 3, maxTokens: 6000 },
-  { key: 'kimi-k2-6', id: '@cf/moonshotai/kimi-k2.6', label: 'Kimi K2.6', note: '长上下文聊天', provider: 'moonshot', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
-  { key: 'kimi-k2-7-code', id: '@cf/moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code', note: '代码优化版本', provider: 'moonshot', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
+  { deprecated: true, key: 'kimi-k2-6', id: '@cf/moonshotai/kimi-k2.6', label: 'Kimi K2.6', note: '长上下文聊天', provider: 'moonshot', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
+  { deprecated: true, key: 'kimi-k2-7-code', id: '@cf/moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code', note: '代码优化版本', provider: 'moonshot', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
   { key: 'glm-4-7-flash', id: '@cf/zai-org/glm-4.7-flash', label: 'GLM-4.7 Flash', note: '快速多语言聊天', provider: 'zhipu', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
-  { key: 'glm-5-2', id: '@cf/zai-org/glm-5.2', label: 'GLM-5.2', note: '智谱旗舰模型', provider: 'zhipu', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
-  { key: 'nemotron3-120b', id: '@cf/nvidia/nemotron-3-120b-a12b', label: 'Nemotron 3 120B', note: '多智能体场景', provider: 'nvidia', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
+  { deprecated: true, key: 'glm-5-2', id: '@cf/zai-org/glm-5.2', label: 'GLM-5.2', note: '智谱旗舰模型', provider: 'zhipu', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
+  { deprecated: true, key: 'nemotron3-120b', id: '@cf/nvidia/nemotron-3-120b-a12b', label: 'Nemotron 3 120B', note: '多智能体场景', provider: 'nvidia', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
   { key: 'granite-4-micro', id: '@cf/ibm/granite-4.0-h-micro', label: 'Granite 4.0 Micro', note: '低延迟轻量聊天', provider: 'ibm', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
 
   { key: 'whisper', id: '@cf/openai/whisper', label: 'Whisper', note: '通用语音转文字', provider: 'openai', task: 'speech_to_text', recommendedRank: 2, maxTokens: 0 },
@@ -109,11 +110,22 @@ export function getModelByKey(key?: string): ModelOption {
 }
 
 export function getModelsByProvider(providerKey: string): ModelOption[] {
-  return MODELS.filter((m) => m.provider === providerKey);
+  return MODELS
+    .filter((m) => m.provider === providerKey && !m.deprecated)
+    .sort((a, b) => a.recommendedRank - b.recommendedRank || a.label.localeCompare(b.label, 'zh-CN'));
 }
 
 export function getModelsByTask(task: ModelTask): ModelOption[] {
-  return MODELS.filter((m) => m.task === task && !m.deprecated).sort((a, b) => a.recommendedRank - b.recommendedRank || a.label.localeCompare(b.label, 'zh-CN'));
+  return MODELS
+    .filter((m) => m.task === task && !m.deprecated)
+    .sort((a, b) => a.recommendedRank - b.recommendedRank || a.label.localeCompare(b.label, 'zh-CN'));
+}
+
+export function getProvidersByTask(task: ModelTask): ProviderGroup[] {
+  const providerKeys = new Set(
+    MODELS.filter((m) => m.task === task && !m.deprecated).map((m) => m.provider)
+  );
+  return PROVIDERS.filter((p) => providerKeys.has(p.key));
 }
 
 export function getProviderByKey(key?: string): ProviderGroup | undefined {
