@@ -26,15 +26,7 @@ export interface TaskGroup {
 }
 
 export const TASKS: TaskGroup[] = [
-  { key: 'chat', label: '聊天对话' },
-  { key: 'speech_to_text', label: '语音转文字' },
-  { key: 'text_to_speech', label: '文字转语音' },
-  { key: 'image', label: '图片生成' },
-  { key: 'vision', label: '图像理解' },
-  { key: 'translation', label: '翻译' },
-  { key: 'embedding', label: '向量嵌入' },
-  { key: 'rerank', label: '重排排序' },
-  { key: 'classification', label: '分类识别' }
+  { key: 'chat', label: '聊天对话' }
 ];
 
 export const PROVIDERS: ProviderGroup[] = [

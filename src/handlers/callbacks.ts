@@ -7,7 +7,7 @@ import { getUserPreferences, setUserPersona, setUserModel, setVoiceReplyEnabled,
 import { setPendingAction } from '../storage/pending-store';
 import { getUsage } from '../storage/usage-store';
 import { listPersonas, resolveSystemPrompt } from '../config/personas';
-import { MODELS, TASKS, getModelById, getModelByKey, getModelsByProvider, getModelsByTask, getProviderByKey, getProvidersByTask, getTaskByKey } from '../config/models';
+import { MODELS, getModelById, getModelByKey, getModelsByProvider, getProviderByKey, getProvidersByTask, getTaskByKey } from '../config/models';
 import { getFollowUps } from '../storage/followup-store';
 import { runAiTurn, runImageTurn } from './messages';
 import { isAdmin } from '../utils/access';
@@ -31,34 +31,15 @@ export function registerCallbacks(bot: Bot<BotContext>) {
     if (!ctx.from) return;
     await ctx.answerCallbackQuery();
 
-    const keyboard = new InlineKeyboard();
-    for (const task of TASKS) {
-      const count = getModelsByTask(task.key).length;
-      keyboard.text(`${task.label}（${count}）`, `modeltask:${task.key}`).row();
-    }
-
-    await ctx.reply('先选择模型任务类型：', { reply_markup: keyboard });
-  });
-
-  bot.callbackQuery(/^modeltask:(.+)$/, async (ctx) => {
-    if (!ctx.from) return;
-    await ctx.answerCallbackQuery();
-
-    const taskKey = ctx.match[1] as ModelTask;
-    const task = getTaskByKey(taskKey);
-    if (!task) return;
-
+    const taskKey: ModelTask = 'chat';
     const providers = getProvidersByTask(taskKey);
     const keyboard = new InlineKeyboard();
     for (const provider of providers) {
       const count = getModelsByProvider(provider.key).filter((m) => m.task === taskKey).length;
       keyboard.text(`${provider.label}（${count}）`, `modelprovider:${taskKey}:${provider.key}`).row();
     }
-    keyboard.text('« 返回任务类型', 'menu:model');
 
-    await ctx.reply(`${task.label}模型：
-
-先选择服务商：`, { reply_markup: keyboard });
+    await ctx.reply('先选择服务商：', { reply_markup: keyboard });
   });
 
   bot.callbackQuery(/^modelprovider:([^:]+):([^:]+)$/, async (ctx) => {
@@ -77,10 +58,9 @@ export function registerCallbacks(bot: Bot<BotContext>) {
       const prefix = index === 0 ? '★ ' : `${index + 1}. `;
       keyboard.text(`${prefix}${model.label}`, `model:${model.key}`).row();
     }
-    keyboard.text('« 返回服务商', `modeltask:${taskKey}`).row();
-    keyboard.text('« 返回任务类型', 'menu:model');
+    keyboard.text('« 返回服务商', 'menu:model');
 
-    await ctx.reply(`${task.label} / ${provider.label}
+    await ctx.reply(`${provider.label}
 
 选择一个模型：`, { reply_markup: keyboard });
   });
