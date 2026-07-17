@@ -70,12 +70,12 @@ export const MODELS: ModelOption[] = [
   { deprecated: true, key: 'nemotron3-120b', id: '@cf/nvidia/nemotron-3-120b-a12b', label: 'Nemotron 3 120B', note: '多智能体场景', provider: 'nvidia', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
   { key: 'granite-4-micro', id: '@cf/ibm/granite-4.0-h-micro', label: 'Granite 4.0 Micro', note: '低延迟轻量聊天', provider: 'ibm', task: 'chat', recommendedRank: 0, maxTokens: 8000 },
 
-  { key: 'groq-llama-3.1-8b-instant', id: 'llama-3.1-8b-instant', label: 'Groq · Llama 3.1 8B Instant', note: 'Groq 超快轻量聊天', provider: 'groq', task: 'chat', recommendedRank: 14, speedRank: 1, qualityRank: 9, maxTokens: 8000 },
-  { key: 'groq-llama-3.3-70b-versatile', id: 'llama-3.3-70b-versatile', label: 'Groq · Llama 3.3 70B Versatile', note: 'Groq 高质量通用聊天', provider: 'groq', task: 'chat', recommendedRank: 15, speedRank: 2, qualityRank: 4, maxTokens: 8000 },
-  { key: 'groq-gpt-oss-20b', id: 'openai/gpt-oss-20b', label: 'Groq · GPT-OSS 20B', note: 'Groq 更快的开源 OpenAI 模型', provider: 'groq', task: 'chat', recommendedRank: 16, speedRank: 1, qualityRank: 5, maxTokens: 8000 },
-  { key: 'groq-gpt-oss-120b', id: 'openai/gpt-oss-120b', label: 'Groq · GPT-OSS 120B', note: 'Groq 更强复杂任务', provider: 'groq', task: 'chat', recommendedRank: 17, speedRank: 2, qualityRank: 2, maxTokens: 8000 },
-  { key: 'groq-compound-mini', id: 'groq/compound-mini', label: 'Groq · Compound Mini', note: 'Groq 复合系统轻量版', provider: 'groq', task: 'chat', recommendedRank: 18, speedRank: 2, qualityRank: 6, maxTokens: 8000 },
-  { key: 'groq-compound', id: 'groq/compound', label: 'Groq · Compound', note: 'Groq 复合系统增强版', provider: 'groq', task: 'chat', recommendedRank: 19, speedRank: 3, qualityRank: 3, maxTokens: 8000 },
+  { key: 'groq-llama-3.1-8b-instant', id: 'llama-3.1-8b-instant', label: 'Groq · Llama 3.1 8B Instant', note: 'Groq 超快轻量聊天', provider: 'groq', task: 'chat', recommendedRank: 14, speedRank: 1, qualityRank: 9, maxTokens: 2000 },
+  { key: 'groq-llama-3.3-70b-versatile', id: 'llama-3.3-70b-versatile', label: 'Groq · Llama 3.3 70B Versatile', note: 'Groq 高质量通用聊天', provider: 'groq', task: 'chat', recommendedRank: 15, speedRank: 2, qualityRank: 4, maxTokens: 4000 },
+  { key: 'groq-gpt-oss-20b', id: 'openai/gpt-oss-20b', label: 'Groq · GPT-OSS 20B', note: 'Groq 更快的开源 OpenAI 模型', provider: 'groq', task: 'chat', recommendedRank: 16, speedRank: 1, qualityRank: 5, maxTokens: 2000 },
+  { key: 'groq-gpt-oss-120b', id: 'openai/gpt-oss-120b', label: 'Groq · GPT-OSS 120B', note: 'Groq 更强复杂任务', provider: 'groq', task: 'chat', recommendedRank: 17, speedRank: 2, qualityRank: 2, maxTokens: 2000 },
+  { key: 'groq-compound-mini', id: 'groq/compound-mini', label: 'Groq · Compound Mini', note: 'Groq 复合系统轻量版', provider: 'groq', task: 'chat', recommendedRank: 18, speedRank: 2, qualityRank: 6, maxTokens: 4000 },
+  { key: 'groq-compound', id: 'groq/compound', label: 'Groq · Compound', note: 'Groq 复合系统增强版', provider: 'groq', task: 'chat', recommendedRank: 19, speedRank: 3, qualityRank: 3, maxTokens: 4000 },
 
   { key: 'whisper', id: '@cf/openai/whisper', label: 'Whisper', note: '通用语音转文字', provider: 'openai', task: 'speech_to_text', recommendedRank: 2, maxTokens: 0 },
   { key: 'whisper-large-v3-turbo', id: '@cf/openai/whisper-large-v3-turbo', label: 'Whisper Large v3 Turbo', note: '更快更强的 ASR', provider: 'openai', task: 'speech_to_text', recommendedRank: 1, maxTokens: 0 },

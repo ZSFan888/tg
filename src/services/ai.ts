@@ -7,9 +7,33 @@ function isGroqModel(modelId: string): boolean {
   return getModelById(modelId).provider === 'groq';
 }
 
+// Groq 免费额度（on_demand service tier）是按「输入 + 预留输出」一起计入
+// 每分钟 TPM 上限的，如果 max_completion_tokens 设得比实际额度大，
+// 请求会直接被拒绝（413 Request too large），而不是生成到一半才截断。
+// 这里按各模型的免费 TPM 上限做保守预留，避免长对话把额度打满。
+const GROQ_TPM_LIMITS: Record<string, number> = {
+  'llama-3.1-8b-instant': 6000,
+  'llama-3.3-70b-versatile': 12000,
+  'openai/gpt-oss-20b': 8000,
+  'openai/gpt-oss-120b': 8000,
+  'groq/compound-mini': 70000,
+  'groq/compound': 70000
+};
+
+function estimateTokensRough(text: string): number {
+  return Math.ceil(text.length / 2.5);
+}
+
 async function runGroqChat(env: Env, messages: Array<{ role: string; content: string }>, modelId: string, stream = false) {
   if (!env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
-  const maxTokens = getMaxTokensForModel(modelId);
+
+  const configuredMaxTokens = getMaxTokensForModel(modelId);
+  const tpmLimit = GROQ_TPM_LIMITS[modelId] ?? configuredMaxTokens;
+  const promptTokens = estimateTokensRough(messages.map((m) => m.content).join(''));
+  // 给输入预留之外，至少留 200 tokens 给输出，否则短对话也会被拒绝。
+  const safeBudget = Math.max(200, tpmLimit - promptTokens - 200);
+  const maxTokens = Math.max(200, Math.min(configuredMaxTokens, safeBudget));
+
   const body: Record<string, unknown> = {
     model: modelId,
     messages,
@@ -58,9 +82,9 @@ function summarizeAiError(err: unknown, modelId: string): { userMessage: string;
   } else if (raw.includes('3007') || raw.includes('3008') || raw.toLowerCase().includes('timeout') || status === 408) {
     category = 'timeout';
     userMessage = '抱歉，当前模型响应超时了，请稍后重试，或先切换到更轻量的模型。';
-  } else if (raw.includes('3006') || status === 413) {
+  } else if (raw.includes('3006') || status === 413 || raw.toLowerCase().includes('rate_limit_exceeded') || raw.toLowerCase().includes('tokens per minute')) {
     category = 'request_too_large';
-    userMessage = '抱歉，这次对话内容有点长，超出了当前模型允许范围；请先清空上下文，或切换到更强的长上下文模型。';
+    userMessage = '抱歉，这次对话内容有点长，超出了当前模型每分钟可用的额度；请先清空上下文，或切换到额度更高的模型。';
   } else if (raw.includes('5004') || raw.includes('3003') || raw.toLowerCase().includes('max_tokens') || raw.toLowerCase().includes('context') || status === 400) {
     category = 'invalid_request';
     userMessage = '抱歉，请求参数或上下文长度不适合当前模型；请换个模型，或先清空上下文后再试。';
