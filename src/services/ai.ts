@@ -7,6 +7,21 @@ function isGroqModel(modelId: string): boolean {
   return getModelById(modelId).provider === 'groq';
 }
 
+// Groq 免费/开发者额度用尽时会返回 429，错误信息里通常带
+// rate_limit_exceeded 或 too many requests；命中时自动降级到
+// Cloudflare Workers AI，而不是直接把错误抛给用户。
+function isGroqQuotaError(err: unknown): boolean {
+  const raw = err instanceof Error ? err.message : String(err);
+  const lower = raw.toLowerCase();
+  return raw.includes('429')
+    || lower.includes('rate_limit_exceeded')
+    || lower.includes('too many requests');
+}
+
+function resolveGroqFallbackModelId(env: Env): string {
+  return env.FALLBACK_AI_MODEL || env.AI_MODEL;
+}
+
 // Groq 免费额度（on_demand service tier）是按「输入 + 预留输出」一起计入
 // 每分钟 TPM 上限的，如果 max_completion_tokens 设得比实际额度大，
 // 请求会直接被拒绝（413 Request too large），而不是生成到一半才截断。
@@ -230,8 +245,9 @@ export async function generateReply(
     { role: 'user', content: input }
   ];
 
+  const resolvedModelId = modelId ?? env.AI_MODEL;
+
   try {
-    const resolvedModelId = modelId ?? env.AI_MODEL;
     const result = isGroqModel(resolvedModelId)
       ? await runGroqChat(env, messages, resolvedModelId, false)
       : await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId));
@@ -243,7 +259,29 @@ export async function generateReply(
     };
     return { text, usage };
   } catch (err) {
-    const summary = summarizeAiError(err, modelId ?? env.AI_MODEL);
+    if (isGroqModel(resolvedModelId) && isGroqQuotaError(err)) {
+      const fallbackModelId = resolveGroqFallbackModelId(env);
+      console.error('Groq quota exhausted, falling back to Workers AI:', { resolvedModelId, fallbackModelId });
+      try {
+        const result = await env.AI.run(fallbackModelId, buildChatParams(messages, fallbackModelId));
+        const output = readResponse(result).trim();
+        const text = output || '我现在有点忙，请你换个问法再试一次。';
+        const usage = readUsage(result) ?? {
+          promptTokens: estimateTokensFromText(messages.map((m) => m.content).join('')),
+          completionTokens: Math.max(64, estimateTokensFromText(text))
+        };
+        return { text: `${text}\n\n（Groq 额度已用完，本次已自动切换到备用模型回答）`, usage };
+      } catch (fallbackErr) {
+        const summary = summarizeAiError(fallbackErr, fallbackModelId);
+        console.error('Fallback AI generation also failed:', summary.logDetail);
+        return {
+          text: summary.userMessage,
+          usage: { promptTokens: 0, completionTokens: 0 }
+        };
+      }
+    }
+
+    const summary = summarizeAiError(err, resolvedModelId);
     console.error('AI generation failed:', summary.logDetail);
     return {
       text: summary.userMessage,
@@ -300,11 +338,27 @@ export async function generateReplyStream(
     { role: 'user', content: input }
   ];
 
+  const resolvedModelId = modelId ?? env.AI_MODEL;
+  let usedFallbackModelId: string | null = null;
+
   try {
-    const resolvedModelId = modelId ?? env.AI_MODEL;
-    const result = isGroqModel(resolvedModelId)
-      ? await runGroqChat(env, messages, resolvedModelId, true)
-      : await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId, true));
+    let result: unknown;
+    try {
+      result = isGroqModel(resolvedModelId)
+        ? await runGroqChat(env, messages, resolvedModelId, true)
+        : await env.AI.run(resolvedModelId, buildChatParams(messages, resolvedModelId, true));
+    } catch (initialErr) {
+      if (isGroqModel(resolvedModelId) && isGroqQuotaError(initialErr)) {
+        usedFallbackModelId = resolveGroqFallbackModelId(env);
+        console.error('Groq quota exhausted, falling back to Workers AI (stream):', {
+          resolvedModelId,
+          fallbackModelId: usedFallbackModelId
+        });
+        result = await env.AI.run(usedFallbackModelId, buildChatParams(messages, usedFallbackModelId, true));
+      } else {
+        throw initialErr;
+      }
+    }
 
     if (!(result instanceof ReadableStream)) {
       const fallback = readResponse(result).trim() || '我现在有点忙，请你换个问法再试一次。';
@@ -387,7 +441,7 @@ export async function generateReplyStream(
       // 完全没生成出任何内容才走真正的错误提示。
       const summary = summarizeAiError(
         streamError ?? new Error(stalled ? 'STREAM_STALLED' : 'STREAM_EMPTY'),
-        modelId ?? env.AI_MODEL
+        usedFallbackModelId ?? resolvedModelId
       );
       console.error('AI streaming produced no content:', summary.logDetail);
       await callbacks.onError(streamError ?? new Error('STREAM_EMPTY'));
@@ -402,15 +456,19 @@ export async function generateReplyStream(
       );
     }
 
-    await callbacks.onDone(trimmed);
+    const finalText = usedFallbackModelId
+      ? `${trimmed}\n\n（Groq 额度已用完，本次已自动切换到备用模型回答）`
+      : trimmed;
+
+    await callbacks.onDone(finalText);
 
     const usage = streamUsage ?? {
       promptTokens: estimateTokensFromText(messages.map((m) => m.content).join('')),
       completionTokens: Math.max(64, estimateTokensFromText(trimmed))
     };
-    return { text: trimmed, usage };
+    return { text: finalText, usage };
   } catch (err) {
-    const summary = summarizeAiError(err, modelId ?? env.AI_MODEL);
+    const summary = summarizeAiError(err, usedFallbackModelId ?? resolvedModelId);
     console.error('AI streaming failed:', summary.logDetail);
     await callbacks.onError(err);
     await callbacks.onDone(summary.userMessage);

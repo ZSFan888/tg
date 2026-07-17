@@ -14,6 +14,7 @@ export interface Env {
   DB: D1Database;
   AI: Ai;
   GROQ_API_KEY?: string;
+  FALLBACK_AI_MODEL?: string;
   GROUP_MENTION_REQUIRED?: string;
   BOT_USERNAME?: string;
 }
